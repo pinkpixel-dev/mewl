@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file.
 
+[Unreleased]
+
 ## 2026-03-31 05:02 EDT
 
 - replaced the pink-purple page backdrop with a dark slate background, dotted texture, and neutral glass surfaces

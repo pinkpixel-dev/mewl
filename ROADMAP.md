@@ -34,7 +34,7 @@
 - [ ] Replace mock lifecycle actions with real process spawning and termination
 - [ ] Discover live ports and reconcile them against reserved bindings
 - [ ] Pull real CPU, memory, disk, and network metrics from the host system
-- [ ] Add permission-safe command execution and process environment handling
+- [x] Add permission-safe command execution and process environment handling
 
 ### Phase 3 Notes
 
@@ -44,6 +44,7 @@
 - `mewl.services.json` now defines Mewl-owned services that can be started, stopped, and restarted through the Electron bridge.
 - Managed autostart and watch-port settings now persist through the Electron bridge and drive the Automation view.
 - Startup profiles and quiet-mode presets can now control grouped managed services, and enabled boot profiles are applied on Electron hydration.
+- Managed launches now enforce explicit env inheritance, repo-bound working directories, executable validation, and reserved-port availability checks.
 - The temporary mock path still exists for the browser build, but the intended end state is no mock fallback once the Electron bridge owns the full runtime.
 
 ## Phase 4: Monitoring and Automation

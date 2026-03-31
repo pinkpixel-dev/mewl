@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 08:14 EDT
+
+- hardened managed service launches in `electron/runtime.cjs` by validating executable tokens, constraining service working directories to the workspace, and resolving commands against the configured PATH
+- changed managed environment handling so services only inherit explicitly listed variables from `inheritEnv` plus their declared `env` overrides
+- added reserved-port checks before managed starts so Mewl refuses to boot a service when one of its watched ports is already occupied
+- surfaced child-process startup errors into managed logs instead of letting one bad service crash the wider Electron hydration flow
+- marked the roadmap's permission-safe command execution and environment-handling item complete and documented the new launch policy
+- revalidated the web build with a successful `npm run build` and confirmed the hardened runtime still booted the managed services
+
 ## 2026-03-31 08:06 EDT
 
 - extended `mewl.services.json` with startup profiles so grouped managed services can be booted or quieted through the Electron bridge

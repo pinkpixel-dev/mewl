@@ -10,8 +10,10 @@ const sampleDelayMs = 180;
 const oneMegabyte = 1024 * 1024;
 const managedLogTailLimit = 12;
 const serviceConfigPath = path.join(process.cwd(), "mewl.services.json");
+const repoRoot = process.cwd();
 const managedServiceState = new Map();
 let autoStartInitialized = false;
+const defaultInheritedEnvKeys = ["PATH", "HOME", "LANG", "TERM", "USER", "LOGNAME", "SHELL"];
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -37,6 +39,10 @@ function createLogEntry(level, text) {
     level,
     text,
   };
+}
+
+function isSafeEnvKey(key) {
+  return /^[A-Z_][A-Z0-9_]*$/i.test(key);
 }
 
 function trimLogEntries(entries) {
@@ -76,6 +82,47 @@ async function runCommand(command, args) {
   });
 
   return result.stdout.trim();
+}
+
+async function pathExists(targetPath) {
+  try {
+    await fs.access(targetPath);
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+async function resolveExecutable(command, envPath) {
+  if (!command || /\s/.test(command.trim())) {
+    throw new Error("Managed service commands must be a single executable token with no shell parsing.");
+  }
+
+  if (command.includes(path.sep)) {
+    const resolvedPath = path.resolve(repoRoot, command);
+    if (!resolvedPath.startsWith(repoRoot)) {
+      throw new Error("Managed service executables must live inside the workspace when using a path.");
+    }
+
+    if (!(await pathExists(resolvedPath))) {
+      throw new Error(`Managed executable not found: ${resolvedPath}`);
+    }
+
+    return resolvedPath;
+  }
+
+  const searchPaths = (envPath || process.env.PATH || "")
+    .split(path.delimiter)
+    .filter(Boolean);
+
+  for (const searchPath of searchPaths) {
+    const candidate = path.join(searchPath, command);
+    if (await pathExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new Error(`Managed executable "${command}" is not available on the configured PATH.`);
 }
 
 async function runCommandWithFallback(commands) {
@@ -452,10 +499,17 @@ async function loadManagedConfig() {
         ports: Array.isArray(service.ports)
           ? service.ports.filter((value) => Number.isInteger(value))
           : [],
+        inheritEnv: Array.isArray(service.inheritEnv)
+          ? service.inheritEnv.filter(
+              (value) => typeof value === "string" && isSafeEnvKey(value),
+            )
+          : [...defaultInheritedEnvKeys],
         env:
           service.env && typeof service.env === "object" && !Array.isArray(service.env)
             ? Object.fromEntries(
-                Object.entries(service.env).filter(([, value]) => typeof value === "string"),
+                Object.entries(service.env).filter(
+                  ([key, value]) => isSafeEnvKey(key) && typeof value === "string",
+                ),
               )
             : {},
         })),
@@ -494,7 +548,11 @@ async function saveManagedConfig(config) {
 }
 
 function resolveServiceCwd(relativeCwd) {
-  return path.resolve(process.cwd(), relativeCwd);
+  const resolvedPath = path.resolve(repoRoot, relativeCwd);
+  if (!resolvedPath.startsWith(repoRoot)) {
+    throw new Error("Managed service working directories must stay inside the workspace root.");
+  }
+  return resolvedPath;
 }
 
 function markHeartbeat(serviceState, label) {
@@ -536,6 +594,20 @@ function attachChildListeners(service, serviceState, child) {
     );
   });
 
+  child.on("error", (error) => {
+    serviceState.child = null;
+    serviceState.starting = false;
+    serviceState.stopping = false;
+    serviceState.startedAt = null;
+    serviceState.lastExit = error.message;
+    markHeartbeat(serviceState, "idle");
+    appendManagedLogEntry(
+      serviceState.logs,
+      "stderr",
+      createLogEntry("error", `Managed service ${service.name} failed to start: ${error.message}`),
+    );
+  });
+
   child.on("exit", (code, signal) => {
     serviceState.child = null;
     serviceState.starting = false;
@@ -563,6 +635,40 @@ function isServiceRunning(serviceState) {
   return Boolean(serviceState.child && serviceState.child.exitCode === null);
 }
 
+function buildManagedEnvironment(service) {
+  const env = {};
+
+  for (const key of service.inheritEnv) {
+    if (typeof process.env[key] === "string") {
+      env[key] = process.env[key];
+    }
+  }
+
+  return {
+    ...env,
+    ...service.env,
+  };
+}
+
+async function assertReservedPortsAvailable(service) {
+  if (!service.watchPorts || service.ports.length === 0) {
+    return;
+  }
+
+  const bindings = await readPortBindings();
+  const occupiedPorts = new Set(
+    bindings
+      .filter((binding) => service.ports.includes(binding.port))
+      .map((binding) => binding.port),
+  );
+
+  if (occupiedPorts.size > 0) {
+    throw new Error(
+      `${service.name} could not start because reserved port${occupiedPorts.size === 1 ? "" : "s"} ${Array.from(occupiedPorts).join(", ")} ${occupiedPorts.size === 1 ? "is" : "are"} already in use.`,
+    );
+  }
+}
+
 async function startManagedService(service) {
   const serviceState = getManagedState(service.id);
   if (isServiceRunning(serviceState)) {
@@ -577,14 +683,17 @@ async function startManagedService(service) {
     createLogEntry("info", `Start requested for ${service.name}.`),
   );
 
-  const child = spawn(service.command, service.args, {
-    cwd: resolveServiceCwd(service.cwd),
-    env: {
-      ...process.env,
-      ...service.env,
-    },
+  const cwd = resolveServiceCwd(service.cwd);
+  const env = buildManagedEnvironment(service);
+  const executable = await resolveExecutable(service.command, env.PATH);
+  await assertReservedPortsAvailable(service);
+
+  const child = spawn(executable, service.args, {
+    cwd,
+    env,
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
+    shell: false,
   });
 
   serviceState.child = child;
@@ -689,14 +798,46 @@ async function initializeManagedServices() {
   const { services, profiles } = await loadManagedConfig();
 
   for (const service of services.filter((item) => item.autoStart)) {
-    await startManagedService(service);
+    try {
+      await startManagedService(service);
+    } catch (error) {
+      const serviceState = getManagedState(service.id);
+      serviceState.starting = false;
+      serviceState.lastExit = error instanceof Error ? error.message : "Autostart failed.";
+      appendManagedLogEntry(
+        serviceState.logs,
+        "stderr",
+        createLogEntry(
+          "error",
+          error instanceof Error
+            ? error.message
+            : `Autostart failed for ${service.name}.`,
+        ),
+      );
+    }
   }
 
   for (const profile of profiles.filter((item) => item.enabled && item.action === "start")) {
     for (const serviceId of profile.serviceIds) {
       const service = services.find((item) => item.id === serviceId);
       if (service) {
-        await startManagedService(service);
+        try {
+          await startManagedService(service);
+        } catch (error) {
+          const serviceState = getManagedState(service.id);
+          serviceState.starting = false;
+          serviceState.lastExit = error instanceof Error ? error.message : "Profile boot failed.";
+          appendManagedLogEntry(
+            serviceState.logs,
+            "stderr",
+            createLogEntry(
+              "error",
+              error instanceof Error
+                ? error.message
+                : `Profile boot failed for ${service.name}.`,
+            ),
+          );
+        }
       }
     }
   }

@@ -12,6 +12,7 @@
       "watchPorts": true,
       "autoStart": true,
       "ports": [4011],
+      "inheritEnv": ["PATH", "HOME", "LANG", "TERM", "USER", "LOGNAME", "SHELL"],
       "env": {}
     },
     {
@@ -26,6 +27,7 @@
       "watchPorts": true,
       "autoStart": false,
       "ports": [4012],
+      "inheritEnv": ["PATH", "HOME", "LANG", "TERM", "USER", "LOGNAME", "SHELL"],
       "env": {}
     }
   ],

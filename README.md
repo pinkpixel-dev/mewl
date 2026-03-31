@@ -15,6 +15,7 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Start, stop, and restart Mewl-owned services through a config-driven Electron lifecycle bridge
 - Update managed `autostart` and `watch ports` settings from the UI and persist them back to `mewl.services.json`
 - Boot managed startup profiles and quiet-mode presets through the Electron Automation view
+- Launch managed services through a hardened Electron runner with explicit env inheritance, workspace-bound cwd checks, PATH resolution, and reserved-port guards
 - Review a port registry with exposure, conflict, and watched-binding states
 - Track host CPU, memory, disk, and network pressure from the sidebar and monitor view
 - Recover gracefully with loading, empty, and error states while the workspace runtime hydrates
@@ -74,6 +75,7 @@ npm run dev:desktop
 Managed desktop services are defined in [`mewl.services.json`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/mewl.services.json). Mewl only performs lifecycle control for services listed there, while other discovered host processes stay read-only.
 Those same managed services now drive the inspector toggles and Electron automation rules, so the UI edits the real desktop config instead of local-only state.
 Profiles in that same file can now boot or quiet grouped services through the Automation page, and enabled startup profiles are applied when the Electron runtime hydrates.
+Managed service launches are now intentionally strict: Mewl resolves a single executable token, keeps service working directories inside the repo, inherits only explicitly listed environment variables, and blocks starts when reserved ports are already occupied.
 
 ## Project Structure
 
@@ -125,6 +127,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - config-driven managed services so desktop lifecycle actions only touch processes Mewl explicitly owns
 - managed service settings that round-trip between the React UI and `mewl.services.json`
 - startup profiles that can boot or quiet groups of Mewl-owned services through the Electron bridge
+- hardened managed service execution rules so the desktop bridge only launches validated commands with controlled environments
 - Pink Pixel branding applied without turning the app into a generic purple SaaS grid
 
 ## Brand

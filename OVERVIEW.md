@@ -90,6 +90,7 @@ The current implementation:
 - starts, stops, and restarts managed services through child-process ownership in the Electron main process
 - persists managed `autoStart` and `watchPorts` changes back into `mewl.services.json` through the preload bridge
 - applies enabled startup profiles on Electron boot and lets the Automation view trigger grouped start/stop presets
+- validates managed commands before spawn by requiring a single executable token, a workspace-safe cwd, an explicit inherited environment, and available reserved ports
 - keeps discovered host processes read-only so Mewl does not send lifecycle signals to processes it does not own
 
 ### `src/styles.css`

@@ -9,6 +9,8 @@ const processLimit = 18;
 const sampleDelayMs = 180;
 const oneMegabyte = 1024 * 1024;
 const managedLogTailLimit = 12;
+const automationHistoryLimit = 36;
+const defaultRestartLimit = 3;
 const repoRoot = process.cwd();
 const managedServiceState = new Map();
 let autoStartInitialized = false;
@@ -17,6 +19,7 @@ const serviceConfigFileName = "mewl.services.json";
 const emptyManagedConfig = {
   services: [],
   profiles: [],
+  history: [],
 };
 
 function uniqueList(values) {
@@ -63,6 +66,42 @@ function createLogEntry(level, text) {
   };
 }
 
+function createAutomationHistoryEntry({
+  title,
+  detail,
+  outcome,
+  source,
+  serviceId,
+  serviceName,
+}) {
+  return {
+    id: `automation-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    stamp: new Date().toISOString(),
+    title,
+    detail,
+    outcome,
+    source,
+    serviceId,
+    serviceName,
+  };
+}
+
+function trimAutomationHistory(entries) {
+  return entries.slice(0, automationHistoryLimit);
+}
+
+function normalizeRestartPolicy(value) {
+  return value === "always" || value === "on-failure" ? value : "manual";
+}
+
+function normalizeRestartLimit(value) {
+  if (!Number.isFinite(value)) {
+    return defaultRestartLimit;
+  }
+
+  return clamp(Math.round(value), 1, 10);
+}
+
 function isSafeEnvKey(key) {
   return /^[A-Z_][A-Z0-9_]*$/i.test(key);
 }
@@ -87,6 +126,8 @@ function getManagedState(serviceId) {
     starting: false,
     stopping: false,
     restartCount: 0,
+    policyRestartCount: 0,
+    launchSource: "runtime",
     startedAt: null,
     lastExit: "No recent exit",
     lastHeartbeat: "idle",
@@ -875,6 +916,7 @@ async function loadManagedConfig() {
     const parsed = JSON.parse(raw);
     const services = Array.isArray(parsed.services) ? parsed.services : [];
     const profiles = Array.isArray(parsed.profiles) ? parsed.profiles : [];
+    const history = Array.isArray(parsed.history) ? parsed.history : [];
     const normalizedServices = [];
     const seenServiceKeys = new Set();
     let configChanged = false;
@@ -914,6 +956,8 @@ async function loadManagedConfig() {
         group: typeof service.group === "string" ? service.group : "managed",
         watchPorts: service.watchPorts !== false,
         autoStart: service.autoStart === true,
+        restartPolicy: normalizeRestartPolicy(service.restartPolicy),
+        restartLimit: normalizeRestartLimit(service.restartLimit),
         ports: Array.isArray(service.ports)
           ? service.ports.filter((value) => Number.isInteger(value))
           : [],
@@ -961,6 +1005,8 @@ async function loadManagedConfig() {
           (typeof service.stopCommand === "string" ? service.stopCommand.trim() : "") ||
         normalizedServiceWithReview.restartCommand !==
           (typeof service.restartCommand === "string" ? service.restartCommand.trim() : "") ||
+        normalizedServiceWithReview.restartPolicy !== normalizeRestartPolicy(service.restartPolicy) ||
+        normalizedServiceWithReview.restartLimit !== normalizeRestartLimit(service.restartLimit) ||
         Boolean(review) !== Boolean(service.review?.needsReview) ||
         JSON.stringify(review?.reasons ?? []) !== JSON.stringify(service.review?.reasons ?? [])
       ) {
@@ -992,7 +1038,41 @@ async function loadManagedConfig() {
       }))
       .filter((profile) => profile.serviceIds.length > 0);
 
+    const normalizedHistory = trimAutomationHistory(
+      history
+        .filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry))
+        .map((entry) => ({
+          id:
+            typeof entry.id === "string" && entry.id.length > 0
+              ? entry.id
+              : `automation-${Math.random().toString(36).slice(2, 8)}`,
+          stamp:
+            typeof entry.stamp === "string" && entry.stamp.length > 0
+              ? entry.stamp
+              : new Date().toISOString(),
+          title:
+            typeof entry.title === "string" && entry.title.length > 0
+              ? entry.title
+              : "Automation event",
+          detail: typeof entry.detail === "string" ? entry.detail : "No detail recorded.",
+          outcome:
+            entry.outcome === "error" || entry.outcome === "warning" ? entry.outcome : "success",
+          source:
+            entry.source === "profile" ||
+            entry.source === "policy" ||
+            entry.source === "runtime"
+              ? entry.source
+              : "manual",
+          serviceId: typeof entry.serviceId === "string" ? entry.serviceId : undefined,
+          serviceName: typeof entry.serviceName === "string" ? entry.serviceName : undefined,
+        })),
+    );
+
     if (normalizedProfiles.length !== profiles.length) {
+      configChanged = true;
+    }
+
+    if (JSON.stringify(normalizedHistory) !== JSON.stringify(history)) {
       configChanged = true;
     }
 
@@ -1000,12 +1080,14 @@ async function loadManagedConfig() {
       await saveManagedConfig({
         services: normalizedServices,
         profiles: normalizedProfiles,
+        history: normalizedHistory,
       });
     }
 
     return {
       services: normalizedServices,
       profiles: normalizedProfiles,
+      history: normalizedHistory,
     };
   } catch (error) {
     if (error && typeof error === "object" && error.code === "ENOENT") {
@@ -1025,6 +1107,12 @@ async function saveManagedConfig(config) {
   );
 }
 
+async function recordAutomationHistory(entry) {
+  const config = await loadManagedConfig();
+  config.history = trimAutomationHistory([createAutomationHistoryEntry(entry), ...config.history]);
+  await saveManagedConfig(config);
+}
+
 function resolveServiceCwd(relativeCwd) {
   const resolvedPath = path.isAbsolute(relativeCwd)
     ? relativeCwd
@@ -1034,6 +1122,109 @@ function resolveServiceCwd(relativeCwd) {
 
 function markHeartbeat(serviceState, label) {
   serviceState.lastHeartbeat = label;
+}
+
+function shouldAutoRestart(service, code, signal) {
+  if (service.restartPolicy === "always") {
+    return true;
+  }
+
+  if (service.restartPolicy === "on-failure") {
+    return code !== 0 || Boolean(signal);
+  }
+
+  return false;
+}
+
+async function handleManagedChildExit(service, serviceState, code, signal) {
+  const wasStopping = serviceState.stopping;
+  const shouldRestart =
+    !wasStopping &&
+    shouldAutoRestart(service, code, signal) &&
+    serviceState.policyRestartCount < service.restartLimit;
+
+  serviceState.child = null;
+  serviceState.starting = false;
+  serviceState.stopping = false;
+  serviceState.startedAt = null;
+  serviceState.lastExit =
+    code === 0
+      ? "Clean exit from the Electron bridge"
+      : signal
+        ? `Exited after signal ${signal}`
+        : `Exited with code ${code ?? "unknown"}`;
+  markHeartbeat(serviceState, "idle");
+  appendManagedLogEntry(
+    serviceState.logs,
+    code === 0 ? "stdout" : "stderr",
+    createLogEntry(
+      code === 0 ? "info" : "error",
+      `Managed service ${service.name} exited (${serviceState.lastExit}).`,
+    ),
+  );
+
+  if (!wasStopping) {
+    await recordAutomationHistory({
+      title:
+        code === 0
+          ? `${service.name} exited`
+          : `${service.name} exited unexpectedly`,
+      detail: `Mewl recorded ${serviceState.lastExit.toLowerCase()}.`,
+      outcome: code === 0 ? "warning" : "error",
+      source: "runtime",
+      serviceId: service.id,
+      serviceName: service.name,
+    });
+  }
+
+  if (!shouldRestart) {
+    if (!wasStopping && service.restartPolicy !== "manual" && serviceState.policyRestartCount >= service.restartLimit) {
+      await recordAutomationHistory({
+        title: `${service.name} reached restart policy limit`,
+        detail: `Automatic ${service.restartPolicy} restarts stopped after ${service.restartLimit} attempt${service.restartLimit === 1 ? "" : "s"} this session.`,
+        outcome: "error",
+        source: "policy",
+        serviceId: service.id,
+        serviceName: service.name,
+      });
+    }
+    return;
+  }
+
+  serviceState.policyRestartCount += 1;
+  serviceState.restartCount += 1;
+  await recordAutomationHistory({
+    title: `${service.name} queued for automatic restart`,
+    detail: `Restart policy ${service.restartPolicy} is retrying launch attempt ${serviceState.policyRestartCount} of ${service.restartLimit}.`,
+    outcome: "warning",
+    source: "policy",
+    serviceId: service.id,
+    serviceName: service.name,
+  });
+
+  try {
+    await startManagedService(service, "policy");
+  } catch (error) {
+    serviceState.starting = false;
+    serviceState.lastExit = error instanceof Error ? error.message : "Automatic restart failed.";
+    appendManagedLogEntry(
+      serviceState.logs,
+      "stderr",
+      createLogEntry(
+        "error",
+        error instanceof Error ? error.message : `Automatic restart failed for ${service.name}.`,
+      ),
+    );
+    await recordAutomationHistory({
+      title: `${service.name} automatic restart failed`,
+      detail:
+        error instanceof Error ? error.message : "The policy-based restart could not be completed.",
+      outcome: "error",
+      source: "policy",
+      serviceId: service.id,
+      serviceName: service.name,
+    });
+  }
 }
 
 function attachChildListeners(service, serviceState, child) {
@@ -1060,6 +1251,9 @@ function attachChildListeners(service, serviceState, child) {
     serviceState.stopping = false;
     serviceState.startedAt = Date.now();
     serviceState.lastExit = "No recent exit";
+    if (serviceState.launchSource !== "policy") {
+      serviceState.policyRestartCount = 0;
+    }
     markHeartbeat(serviceState, "just now");
     appendManagedLogEntry(
       serviceState.logs,
@@ -1083,28 +1277,18 @@ function attachChildListeners(service, serviceState, child) {
       "stderr",
       createLogEntry("error", `Managed service ${service.name} failed to start: ${error.message}`),
     );
+    void recordAutomationHistory({
+      title: `${service.name} failed to start`,
+      detail: error.message,
+      outcome: "error",
+      source: serviceState.launchSource === "policy" ? "policy" : serviceState.launchSource,
+      serviceId: service.id,
+      serviceName: service.name,
+    });
   });
 
   child.on("exit", (code, signal) => {
-    serviceState.child = null;
-    serviceState.starting = false;
-    serviceState.stopping = false;
-    serviceState.startedAt = null;
-    serviceState.lastExit =
-      code === 0
-        ? "Clean exit from the Electron bridge"
-        : signal
-          ? `Exited after signal ${signal}`
-          : `Exited with code ${code ?? "unknown"}`;
-    markHeartbeat(serviceState, "idle");
-    appendManagedLogEntry(
-      serviceState.logs,
-      code === 0 ? "stdout" : "stderr",
-      createLogEntry(
-        code === 0 ? "info" : "error",
-        `Managed service ${service.name} exited (${serviceState.lastExit}).`,
-      ),
-    );
+    void handleManagedChildExit(service, serviceState, code, signal);
   });
 }
 
@@ -1216,7 +1400,7 @@ async function runManagedCommand(service, commandLine, label) {
   }
 }
 
-async function startManagedService(service) {
+async function startManagedService(service, source = "manual") {
   const serviceState = getManagedState(service.id);
   if (isServiceRunning(serviceState)) {
     return "Service is already running.";
@@ -1225,6 +1409,10 @@ async function startManagedService(service) {
   serviceState.starting = true;
   serviceState.stopping = false;
   serviceState.adoptedPid = null;
+  serviceState.launchSource = source;
+  if (source !== "policy") {
+    serviceState.policyRestartCount = 0;
+  }
   appendManagedLogEntry(
     serviceState.logs,
     "stdout",
@@ -1246,6 +1434,21 @@ async function startManagedService(service) {
 
   serviceState.child = child;
   attachChildListeners(service, serviceState, child);
+  await recordAutomationHistory({
+    title: `Started ${service.name}`,
+    detail:
+      source === "policy"
+        ? "Restart policy requested a new launch."
+        : source === "profile"
+          ? "A startup profile launched this managed service."
+          : source === "runtime"
+            ? "The runtime boot sequence launched this managed service."
+            : "A managed start action launched this service.",
+    outcome: "success",
+    source,
+    serviceId: service.id,
+    serviceName: service.name,
+  });
   return `Started ${service.name}.`;
 }
 
@@ -1363,7 +1566,7 @@ function buildAutomationRules(services, profiles) {
   ];
 }
 
-async function stopManagedService(service) {
+async function stopManagedService(service, source = "manual") {
   const serviceState = getManagedState(service.id);
   if (service.stopCommand) {
     serviceState.stopping = true;
@@ -1379,6 +1582,18 @@ async function stopManagedService(service) {
     } else if (serviceState.adoptedPid) {
       await waitForPidExit(serviceState.adoptedPid);
     }
+
+    await recordAutomationHistory({
+      title: `Stopped ${service.name}`,
+      detail:
+        source === "profile"
+          ? "A quiet-mode profile ran the configured stop flow."
+          : "Mewl ran the configured stop flow for this service.",
+      outcome: "success",
+      source,
+      serviceId: service.id,
+      serviceName: service.name,
+    });
 
     return `Stopped ${service.name}.`;
   }
@@ -1437,23 +1652,54 @@ async function stopManagedService(service) {
     );
   }
 
+  await recordAutomationHistory({
+    title: `Stopped ${service.name}`,
+    detail:
+      source === "profile"
+        ? "A quiet-mode profile parked the tracked process."
+        : "Mewl stopped the tracked process for this managed service.",
+    outcome: "success",
+    source,
+    serviceId: service.id,
+    serviceName: service.name,
+  });
+
   return `Stopped ${service.name}.`;
 }
 
-async function restartManagedService(service) {
+async function restartManagedService(service, source = "manual") {
   const serviceState = getManagedState(service.id);
   serviceState.restartCount += 1;
 
   if (service.restartCommand) {
     await runManagedCommand(service, service.restartCommand, "Restart");
+    await recordAutomationHistory({
+      title: `Restarted ${service.name}`,
+      detail: "Mewl ran the configured restart command for this managed service.",
+      outcome: "success",
+      source,
+      serviceId: service.id,
+      serviceName: service.name,
+    });
     return `Restarted ${service.name}.`;
   }
 
   if (isServiceRunning(serviceState)) {
-    await stopManagedService(service);
+    await stopManagedService(service, source);
   }
 
-  await startManagedService(service);
+  await startManagedService(service, source);
+  await recordAutomationHistory({
+    title: `Restarted ${service.name}`,
+    detail:
+      source === "policy"
+        ? "Restart policy recycled this managed service after an exit."
+        : "Mewl completed the fallback stop/start restart flow.",
+    outcome: "success",
+    source,
+    serviceId: service.id,
+    serviceName: service.name,
+  });
   return `Restarted ${service.name}.`;
 }
 
@@ -1522,7 +1768,7 @@ async function initializeManagedServices() {
 
   for (const service of services.filter((item) => item.autoStart)) {
     try {
-      await startManagedService(service);
+      await startManagedService(service, "runtime");
     } catch (error) {
       const serviceState = getManagedState(service.id);
       serviceState.starting = false;
@@ -1537,6 +1783,14 @@ async function initializeManagedServices() {
             : `Autostart failed for ${service.name}.`,
         ),
       );
+      await recordAutomationHistory({
+        title: `${service.name} autostart failed`,
+        detail: error instanceof Error ? error.message : "Autostart failed.",
+        outcome: "error",
+        source: "runtime",
+        serviceId: service.id,
+        serviceName: service.name,
+      });
     }
   }
 
@@ -1545,7 +1799,7 @@ async function initializeManagedServices() {
       const service = services.find((item) => item.id === serviceId);
       if (service) {
         try {
-          await startManagedService(service);
+          await startManagedService(service, "profile");
         } catch (error) {
           const serviceState = getManagedState(service.id);
           serviceState.starting = false;
@@ -1560,6 +1814,14 @@ async function initializeManagedServices() {
                 : `Profile boot failed for ${service.name}.`,
             ),
           );
+          await recordAutomationHistory({
+            title: `${service.name} profile start failed`,
+            detail: error instanceof Error ? error.message : "Profile boot failed.",
+            outcome: "error",
+            source: "profile",
+            serviceId: service.id,
+            serviceName: service.name,
+          });
         }
       }
     }
@@ -1662,7 +1924,7 @@ async function hydrateRuntimeSnapshot() {
       readPortBindings(),
       loadManagedConfig(),
     ]);
-  const { services, profiles } = config;
+  const { services, profiles, history } = config;
 
   const memoryPercent = clamp(
     Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100),
@@ -1721,6 +1983,8 @@ async function hydrateRuntimeSnapshot() {
       lastHeartbeat: liveProcess ? "live" : serviceState.lastHeartbeat,
       autoStart: service.autoStart,
       watchPorts: service.watchPorts,
+      restartPolicy: service.restartPolicy,
+      restartLimit: service.restartLimit,
       managed: true,
       titleColor: service.titleColor,
       icon: service.icon,
@@ -1775,6 +2039,8 @@ async function hydrateRuntimeSnapshot() {
         lastHeartbeat: "live",
         autoStart: false,
         watchPorts: processPorts.length > 0,
+        restartPolicy: "manual",
+        restartLimit: defaultRestartLimit,
         managed: false,
         logs: {
           stdout: [
@@ -1872,6 +2138,7 @@ async function hydrateRuntimeSnapshot() {
     alerts: buildAlerts([...managedProcesses, ...discoveredProcesses], ports, metrics, services),
     monitorMetrics: [metrics.cpu, metrics.memory, metrics.disk, metrics.network, metrics.gpu],
     automationRules: buildAutomationRules(services, profiles),
+    automationHistory: history,
   };
 }
 
@@ -1962,6 +2229,14 @@ async function updateManagedService(processId, updates) {
       typeof updates.watchPorts === "boolean"
         ? updates.watchPorts
         : previousService.watchPorts,
+    restartPolicy:
+      typeof updates.restartPolicy === "string"
+        ? normalizeRestartPolicy(updates.restartPolicy)
+        : previousService.restartPolicy,
+    restartLimit:
+      typeof updates.restartLimit === "number"
+        ? normalizeRestartLimit(updates.restartLimit)
+        : previousService.restartLimit,
     titleColor:
       typeof updates.titleColor === "string" ? updates.titleColor : previousService.titleColor,
     icon: typeof updates.icon === "string" ? updates.icon : previousService.icon,
@@ -2014,6 +2289,8 @@ async function createManagedService(service) {
     group: normalizeGroup(runtime, cwd),
     watchPorts: service.watchPorts !== false,
     autoStart: service.autoStart === true,
+    restartPolicy: normalizeRestartPolicy(service.restartPolicy),
+    restartLimit: normalizeRestartLimit(service.restartLimit),
     ports: [],
     inheritEnv: [...defaultInheritedEnvKeys],
     env: {},
@@ -2073,12 +2350,42 @@ async function applyAutomationRule(ruleId, enabled) {
 
   if (ruleId.startsWith("service-autostart:")) {
     const processId = ruleId.replace("service-autostart:", "");
-    return updateManagedService(processId, { autoStart: enabled });
+    const config = await loadManagedConfig();
+    const service = config.services.find((item) => item.id === processId);
+    const result = await updateManagedService(processId, { autoStart: enabled });
+    if (service) {
+      await recordAutomationHistory({
+        title: `${service.name} autostart ${enabled ? "enabled" : "disabled"}`,
+        detail: enabled
+          ? "This managed service will now launch when the desktop runtime boots."
+          : "This managed service will no longer launch automatically on boot.",
+        outcome: "success",
+        source: "manual",
+        serviceId: service.id,
+        serviceName: service.name,
+      });
+    }
+    return result;
   }
 
   if (ruleId.startsWith("service-watch:")) {
     const processId = ruleId.replace("service-watch:", "");
-    return updateManagedService(processId, { watchPorts: enabled });
+    const config = await loadManagedConfig();
+    const service = config.services.find((item) => item.id === processId);
+    const result = await updateManagedService(processId, { watchPorts: enabled });
+    if (service) {
+      await recordAutomationHistory({
+        title: `${service.name} port watch ${enabled ? "enabled" : "disabled"}`,
+        detail: enabled
+          ? "Mewl will include this service in watched port scans."
+          : "Mewl will stop tracking this service during watched port scans.",
+        outcome: "success",
+        source: "manual",
+        serviceId: service.id,
+        serviceName: service.name,
+      });
+    }
+    return result;
   }
 
   if (ruleId.startsWith("profile:")) {
@@ -2100,13 +2407,22 @@ async function applyAutomationRule(ruleId, enabled) {
       }
 
       if (profile.action === "start" && enabled) {
-        await startManagedService(service);
+        await startManagedService(service, "profile");
       }
 
       if (profile.action === "stop" && enabled) {
-        await stopManagedService(service);
+        await stopManagedService(service, "profile");
       }
     }
+
+    await recordAutomationHistory({
+      title: `${profile.title} ${enabled ? "enabled" : "disabled"}`,
+      detail: enabled
+        ? "The profile was applied to its managed services."
+        : "The profile was disabled for future automation runs.",
+      outcome: "success",
+      source: "profile",
+    });
 
     return {
       snapshot: await hydrateRuntimeSnapshot(),
@@ -2123,7 +2439,7 @@ async function shutdownManagedServices() {
   for (const service of services) {
     const serviceState = getManagedState(service.id);
     if (isServiceRunning(serviceState)) {
-      await stopManagedService(service);
+      await stopManagedService(service, "runtime");
     }
   }
 }

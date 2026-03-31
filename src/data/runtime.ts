@@ -43,6 +43,21 @@ export type ManagedServiceReview = {
   reasons: string[];
 };
 
+export type RestartPolicy = "manual" | "on-failure" | "always";
+
+export type AutomationHistoryOutcome = "success" | "warning" | "error";
+
+export type AutomationHistoryEntry = {
+  id: string;
+  stamp: string;
+  title: string;
+  detail: string;
+  outcome: AutomationHistoryOutcome;
+  serviceId?: string;
+  serviceName?: string;
+  source: "manual" | "runtime" | "policy" | "profile";
+};
+
 export type ManagedProcess = {
   id: string;
   name: string;
@@ -66,6 +81,8 @@ export type ManagedProcess = {
   lastHeartbeat: string;
   autoStart: boolean;
   watchPorts: boolean;
+  restartPolicy: RestartPolicy;
+  restartLimit: number;
   managed: boolean;
   titleColor?: ManagedServiceColor;
   icon?: ManagedServiceIcon;
@@ -82,6 +99,8 @@ export type ManagedServiceDraft = {
   cwd: string;
   autoStart: boolean;
   watchPorts: boolean;
+  restartPolicy: RestartPolicy;
+  restartLimit: number;
   titleColor: ManagedServiceColor;
   icon: ManagedServiceIcon;
 };
@@ -133,4 +152,5 @@ export type RuntimeSnapshot = {
   alerts: AlertRecord[];
   monitorMetrics: MonitorMetric[];
   automationRules: AutomationRule[];
+  automationHistory: AutomationHistoryEntry[];
 };

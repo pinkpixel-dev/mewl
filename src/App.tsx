@@ -44,6 +44,8 @@ import {
 import {
   type AlertRecord,
   type AlertSeverity,
+  type AutomationHistoryEntry,
+  type AutomationHistoryOutcome,
   type AutomationRule,
   type ManagedServiceColor,
   type ManagedServiceDraft,
@@ -56,6 +58,7 @@ import {
   type ProcessLogLevel,
   type PortStatus,
   type ProcessStatus,
+  type RestartPolicy,
   type RuntimeSnapshot,
   type WorkspaceView,
 } from "./data/runtime";
@@ -85,6 +88,7 @@ type PersistedWorkspaceState = {
     ports: PortBinding[];
     alerts: AlertRecord[];
     automationRules: AutomationRule[];
+    automationHistory: AutomationHistoryEntry[];
     commandState: string;
   };
 };
@@ -214,6 +218,22 @@ const logLevelTextClassMap: Record<ProcessLogLevel, string> = {
   error: "text-rose-200",
 };
 
+const restartPolicyOptions: Array<{ id: RestartPolicy; label: string; detail: string }> = [
+  { id: "manual", label: "Manual", detail: "Only restart when you explicitly ask Mewl to do it." },
+  {
+    id: "on-failure",
+    label: "On Failure",
+    detail: "Retry automatically when the service exits with a code or signal that looks unhealthy.",
+  },
+  { id: "always", label: "Always", detail: "Try to bring the service back even after a clean exit." },
+];
+
+const automationOutcomeToneMap: Record<AutomationHistoryOutcome, "online" | "warning" | "offline"> = {
+  success: "online",
+  warning: "warning",
+  error: "offline",
+};
+
 const formatLogStamp = () =>
   new Intl.DateTimeFormat("en-US", {
     hour: "2-digit",
@@ -233,6 +253,8 @@ const createEmptyManagedDraft = (): ManagedServiceDraft => ({
   cwd: ".",
   autoStart: false,
   watchPorts: true,
+  restartPolicy: "manual",
+  restartLimit: 3,
   titleColor: "default",
   icon: "server",
 });
@@ -246,6 +268,8 @@ const createDraftFromManagedProcess = (process: ManagedProcess): ManagedServiceD
   cwd: process.cwd,
   autoStart: process.autoStart,
   watchPorts: process.watchPorts,
+  restartPolicy: process.restartPolicy,
+  restartLimit: process.restartLimit,
   titleColor: process.titleColor ?? "default",
   icon: process.icon ?? "server",
 });
@@ -259,6 +283,8 @@ const createDraftFromObservedProcess = (process: ManagedProcess): ManagedService
   cwd: process.cwd === "unknown" ? "." : process.cwd,
   autoStart: false,
   watchPorts: process.ports.length > 0,
+  restartPolicy: "manual",
+  restartLimit: 3,
   titleColor: "default",
   icon:
     process.runtime === "docker"
@@ -327,6 +353,9 @@ function readPersistedWorkspace(): PersistedWorkspaceState | null {
       automationRules: Array.isArray(runtime.automationRules)
         ? (runtime.automationRules as AutomationRule[])
         : [],
+      automationHistory: Array.isArray(runtime.automationHistory)
+        ? (runtime.automationHistory as AutomationHistoryEntry[])
+        : [],
       commandState:
         typeof runtime.commandState === "string" ? runtime.commandState : defaultCommandState,
     },
@@ -362,6 +391,7 @@ function App() {
   const [alerts, setAlerts] = useState<AlertRecord[]>([]);
   const [monitorMetrics, setMonitorMetrics] = useState<MonitorMetric[]>([]);
   const [automationRules, setAutomationRules] = useState<AutomationRule[]>([]);
+  const [automationHistory, setAutomationHistory] = useState<AutomationHistoryEntry[]>([]);
   const [commandState, setCommandState] = useState(defaultCommandState);
   const [isPending, startActionTransition] = useTransition();
   const runtimeSource = getRuntimeSourceDescriptor();
@@ -373,6 +403,7 @@ function App() {
     setAlerts(snapshot.alerts);
     setMonitorMetrics(snapshot.monitorMetrics);
     setAutomationRules(snapshot.automationRules);
+    setAutomationHistory(snapshot.automationHistory);
     setSelectedProcessId((current) =>
       snapshot.processes.some((process) => process.id === current)
         ? current
@@ -409,6 +440,7 @@ function App() {
         const hydratedPorts = snapshot.ports;
         const hydratedAlerts = snapshot.alerts;
         const hydratedAutomationRules = snapshot.automationRules;
+        const hydratedAutomationHistory = snapshot.automationHistory;
         const fallbackSelectedProcessId =
           hydratedProcesses[0]?.id ?? snapshot.processes[0]?.id ?? "";
 
@@ -417,6 +449,7 @@ function App() {
         setAlerts(hydratedAlerts);
         setMonitorMetrics(snapshot.monitorMetrics);
         setAutomationRules(hydratedAutomationRules);
+        setAutomationHistory(hydratedAutomationHistory);
         setCommandState(persisted?.runtime.commandState ?? defaultCommandState);
         setActiveView(persisted?.preferences.activeView ?? "overview");
         setQuery(persisted?.preferences.query ?? "");
@@ -474,6 +507,7 @@ function App() {
         ports: isLiveElectronRuntime ? [] : ports,
         alerts: isLiveElectronRuntime ? [] : alerts,
         automationRules: isLiveElectronRuntime ? [] : automationRules,
+        automationHistory: isLiveElectronRuntime ? [] : automationHistory,
         commandState,
       },
     });
@@ -481,6 +515,7 @@ function App() {
     activeView,
     alerts,
     automationRules,
+    automationHistory,
     commandState,
     expandedProcessIds,
     ports,
@@ -605,6 +640,11 @@ function App() {
   const previewProcesses = liveProcesses.slice(0, 4);
   const previewPorts = filteredPorts.filter((port) => port.status !== "standby").slice(0, 4);
   const dashboardMetrics = monitorMetrics.slice(0, 3);
+  const activeRestartPolicyCount = processes.filter(
+    (process) => process.managed && process.restartPolicy !== "manual",
+  ).length;
+  const automationFailureCount = automationHistory.filter((entry) => entry.outcome === "error").length;
+  const latestAutomationEntries = automationHistory.slice(0, 10);
   const runtimeIndicatorTone =
     runtimeStatus === "ready"
       ? "online"
@@ -626,6 +666,7 @@ function App() {
     setManagedEditorMode("edit");
     setManagedDraft(createEmptyManagedDraft());
     setManagedPrefillSourceId("");
+    setAutomationHistory([]);
 
     void hydrateRuntimeSnapshot()
       .then((snapshot) => {
@@ -634,6 +675,7 @@ function App() {
         setAlerts(snapshot.alerts);
         setMonitorMetrics(snapshot.monitorMetrics);
         setAutomationRules(snapshot.automationRules);
+        setAutomationHistory(snapshot.automationHistory);
         setCommandState(defaultCommandState);
         setActiveView("overview");
         setSelectedProcessId(snapshot.processes[0]?.id ?? "");
@@ -2095,11 +2137,17 @@ function App() {
                     </div>
                   ) : null}
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     {[
                       ["PID", process.pid ? `${process.pid}` : "idle"],
                       ["Ports", process.ports.length > 0 ? process.ports.join(", ") : "none"],
                       ["Pulse", process.lastHeartbeat],
+                      [
+                        "Restart",
+                        process.restartPolicy === "manual"
+                          ? "manual"
+                          : `${process.restartPolicy} / ${process.restartLimit}x`,
+                      ],
                     ].map(([label, value]) => (
                       <div
                         key={label}
@@ -2359,6 +2407,59 @@ function App() {
               }
               hex={accent.purple}
             />
+          </div>
+
+          <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+              Restart Policy
+            </p>
+            <div className="mt-4 grid gap-3">
+              {restartPolicyOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() =>
+                    setManagedDraft((current) => ({ ...current, restartPolicy: option.id }))
+                  }
+                  className={`rounded-[18px] border px-4 py-4 text-left transition duration-300 ${
+                    managedDraft.restartPolicy === option.id
+                      ? "border-white/14 bg-black/26 text-white"
+                      : "border-white/8 bg-black/14 text-white/56 hover:text-white/82"
+                  }`}
+                >
+                  <p className="text-sm font-semibold">{option.label}</p>
+                  <p className="mt-1 text-sm text-white/56">{option.detail}</p>
+                </button>
+              ))}
+            </div>
+
+            {managedDraft.restartPolicy !== "manual" ? (
+              <label className="mt-4 block">
+                <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                  Retry Limit
+                </p>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  className="mt-2 w-full rounded-[20px] border border-white/10 bg-black/18 px-4 py-3 text-sm text-white outline-none"
+                  value={managedDraft.restartLimit}
+                  onChange={(event) =>
+                    setManagedDraft((current) => ({
+                      ...current,
+                      restartLimit: Math.min(
+                        10,
+                        Math.max(1, Number.parseInt(event.target.value || "1", 10) || 1),
+                      ),
+                    }))
+                  }
+                />
+                <p className="mt-2 text-sm text-white/46">
+                  Mewl will stop retrying after this many automatic restart attempts in the current
+                  desktop session.
+                </p>
+              </label>
+            ) : null}
           </div>
 
           <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
@@ -2725,7 +2826,7 @@ function App() {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)]">
+      <div className="mt-6 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(260px,0.8fr)_minmax(260px,0.8fr)]">
         <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
           <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
             Latest Activity
@@ -2742,51 +2843,124 @@ function App() {
           </div>
           <p className="mt-2 text-sm text-white/54">{runtimeSource.detail}</p>
         </div>
+        <div className="rounded-[24px] border border-white/8 bg-black/18 p-4">
+          <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+            Automation Snapshot
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            {[
+              ["Restart Policies", `${activeRestartPolicyCount}`],
+              ["History Events", `${automationHistory.length}`],
+              ["Failures", `${automationFailureCount}`],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-[18px] border border-white/8 bg-[#0f141b]/94 px-3 py-3">
+                <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">{label}</p>
+                <p className="mt-2 text-lg font-semibold text-white">{value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="mt-6 space-y-3">
-        {automationRules.length > 0 ? (
-          automationRules.map((rule) => (
-            <div
-              key={rule.id}
-              className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 px-4 py-4"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-white/90">{rule.title}</p>
-                  <p className="mt-1 text-sm text-white/54">{rule.detail}</p>
-                  <p className="mt-3 text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-                    {rule.cadence}
-                  </p>
+      <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.92fr)]">
+        <div className="space-y-3">
+          {automationRules.length > 0 ? (
+            automationRules.map((rule) => (
+              <div
+                key={rule.id}
+                className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 px-4 py-4"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-white/90">{rule.title}</p>
+                    <p className="mt-1 text-sm text-white/54">{rule.detail}</p>
+                    <p className="mt-3 text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                      {rule.cadence}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleRule(rule.id, !rule.enabled)}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
+                    style={
+                      rule.enabled
+                        ? ({
+                            boxShadow: `0 0 24px ${accent.green}22`,
+                          } satisfies CSSProperties)
+                        : undefined
+                    }
+                  >
+                    <span
+                      className="size-2.5 rounded-full"
+                      style={{
+                        backgroundColor: rule.enabled ? accent.green : "rgba(255,255,255,0.26)",
+                      }}
+                    />
+                    {rule.enabled ? "On" : "Off"}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => toggleRule(rule.id, !rule.enabled)}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
-                  style={
-                    rule.enabled
-                      ? ({
-                          boxShadow: `0 0 24px ${accent.green}22`,
-                        } satisfies CSSProperties)
-                      : undefined
-                  }
-                >
-                  <span
-                    className="size-2.5 rounded-full"
-                    style={{
-                      backgroundColor: rule.enabled ? accent.green : "rgba(255,255,255,0.26)",
-                    }}
-                  />
-                  {rule.enabled ? "On" : "Off"}
-                </button>
               </div>
+            ))
+          ) : (
+            <div className="rounded-[24px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48">
+              No automation rules have been provisioned for this workspace yet.
             </div>
-          ))
-        ) : (
-          <div className="rounded-[24px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48">
-            No automation rules have been provisioned for this workspace yet.
+          )}
+        </div>
+
+        <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                Automation History
+              </p>
+              <p className="mt-2 text-sm text-white/56">
+                Starts, stops, profile runs, retries, and failures are recorded here so the runtime
+                feels explainable instead of mysterious.
+              </p>
+            </div>
+            <div className="rounded-full border border-white/10 bg-black/18 px-3 py-1 text-xs uppercase tracking-[0.22em] text-white/58">
+              {automationHistory.length} events
+            </div>
           </div>
-        )}
+
+          <div className="mt-5 space-y-3">
+            {latestAutomationEntries.length > 0 ? (
+              latestAutomationEntries.map((entry) => (
+                <article
+                  key={entry.id}
+                  className="rounded-[20px] border border-white/8 bg-black/18 px-4 py-4"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white/88">{entry.title}</p>
+                      <p className="mt-1 text-sm text-white/56">{entry.detail}</p>
+                    </div>
+                    <StatusPill
+                      tone={automationOutcomeToneMap[entry.outcome]}
+                      label={entry.outcome}
+                    />
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[0.68rem] uppercase tracking-[0.2em] text-white/36">
+                    <span>{new Date(entry.stamp).toLocaleString()}</span>
+                    <span>•</span>
+                    <span>{entry.source}</span>
+                    {entry.serviceName ? (
+                      <>
+                        <span>•</span>
+                        <span>{entry.serviceName}</span>
+                      </>
+                    ) : null}
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-[22px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48">
+                No automation events have been recorded yet.
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </section>
   );

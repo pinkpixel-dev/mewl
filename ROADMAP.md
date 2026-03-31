@@ -56,7 +56,7 @@
 
 ## Phase 4: Monitoring and Automation
 
-- [ ] Add restart policies
+- [x] Add restart policies
 - [x] Add grouped startup profiles and quiet-mode presets
 - [x] Add GPU telemetry to the monitor and sidebar health surfaces with graceful unavailable handling
 - [x] Simplify the Automation page by folding the old state column into lighter inline status panels
@@ -69,7 +69,7 @@
 - [ ] Add alerts center filtering by severity, service, and time window
 - [ ] Surface process crash loops, orphaned ports, and unhealthy resource spikes
 - [ ] Add richer charts for CPU, memory, network, and disk trends
-- [ ] Add automation history for what started, stopped, or failed and why
+- [x] Add automation history for what started, stopped, or failed and why
 - [x] Replace the single mixed Processes workspace with a two-part model: `Observed` for live host processes and `Managed` for services Mewl should control intentionally
 
 ### Phase 4 Planned Product Slice: Observed + Managed Runtime
@@ -138,6 +138,7 @@ This is the main UX split the product now points toward:
 - The guided create-from-observed review flow and the clearer observed-only kill action are now live.
 - Managed cards now hydrate pid, ports, status, runtime, and heartbeat details directly from the host scan while keeping the saved launch definition user-authored.
 - Older inferred managed config entries now normalize into the explicit command schema on load, and the Managed workspace can surface cleanup reasons plus let users confirm the migrated definition in-app.
+- Managed services can now define restart policies with retry limits, and the Electron bridge records automatic retries plus exits in a persisted automation history feed.
 
 ## Phase 5: Quality and Delivery
 

@@ -22,8 +22,10 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Start, stop, and restart Mewl-owned services through a config-driven Electron lifecycle bridge
 - Save managed services with explicit start commands, optional stop and restart commands, working directories, notes, colors, and card icons
 - Review imported legacy managed-service entries from older `mewl.services.json` shapes, see why they were normalized, and mark them as cleaned up from the Managed editor
+- Choose per-service restart policies with retry limits so Mewl can recover managed services after unhealthy exits
 - Update managed `autostart` and `watch ports` settings from the UI and persist them back to `mewl.services.json`
 - Boot managed startup profiles and quiet-mode presets through the Electron Automation view
+- Inspect a persisted automation history stream for starts, stops, profile runs, retries, and failures
 - Launch managed services through a hardened Electron runner with explicit env inheritance, command tokenization, PATH resolution, and reserved-port guards
 - Reattach orphaned managed services that are already running on the host so lifecycle actions can reclaim and control them cleanly
 - Normalize accidental helper-process promotions back to a single managed entry so repeated `Manage` clicks on child processes do not create confusing duplicates in the saved config
@@ -54,6 +56,7 @@ This is the first real product pass, not the final native implementation yet.
 - Managed-service configuration now lives in a per-user app config file instead of the repo, so packaged Electron builds can keep using the same settings location.
 - Managed services are now explicit saved definitions with a start command plus optional stop and restart commands instead of inferred promotion from the Processes page.
 - Legacy managed-service entries can now surface cleanup reasons in the Managed workspace so older config shapes are reviewed in-app instead of being silently rewritten with no follow-up.
+- Managed services can now opt into restart policies (`manual`, `on-failure`, or `always`) with bounded retry limits for the current desktop session.
 - Observed processes can now seed the Managed editor through an explicit review step instead of being silently promoted straight into saved config.
 - The live Processes page now exposes only two observed-process actions: create a managed draft from what Mewl can currently see, or kill the live pid without changing the managed catalog.
 
@@ -172,7 +175,9 @@ The current product direction is intentionally utility-first rather than dashboa
 - a tuned Ports registry layout that keeps longer `Target` bindings readable in the desktop shell
 - config-driven managed services so desktop lifecycle actions only touch processes Mewl explicitly owns
 - managed service settings that round-trip between the React UI and `mewl.services.json`
+- managed restart-policy settings that let the Electron bridge retry services after exits without guessing indefinitely
 - startup profiles that can boot or quiet groups of Mewl-owned services through the Electron bridge
+- a persisted automation history feed that explains what started, stopped, retried, failed, or was toggled and why
 - hardened managed service execution rules so the desktop bridge only launches validated commands with controlled environments
 - the current product step is the first half of the `Observed` / `Managed` split, with `Managed` now owning saved service definitions and the live Processes page staying visually lighter
 - older inferred managed config entries now normalize into the explicit saved-service schema during load so the runtime can separate remembered service definitions from current host processes

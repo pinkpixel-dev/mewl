@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 14:37 EDT
+
+- added managed-service restart policies with bounded retry limits, including `manual`, `on-failure`, and `always` modes in the Managed editor
+- extended the Electron runtime to record persisted automation history for manual actions, runtime boot flows, profile runs, policy retries, and failure paths
+- refreshed the Automation page with policy counts, failure summaries, and a real history feed instead of only showing toggle rows
+- refreshed the README, overview, roadmap, and project instructions to document restart policies and automation history
+- revalidated the app with a successful `npm run build`
+
 ## 2026-03-31 14:30 EDT
 
 - added a Managed cleanup flow for legacy `mewl.services.json` entries, including persisted review metadata from the Electron normalization layer and in-app confirmation actions

@@ -4,7 +4,7 @@
 
 Mewl is a local process and port management app for Pink Pixel. This pass pushes the project from a visual scaffold into a more functional product shell by restoring workspace state, surfacing structured process logs, and handling runtime loading and failure states more deliberately.
 
-The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, wires real lifecycle control for Mewl-owned services, and now extends the Managed workspace with an in-app cleanup flow for legacy `mewl.services.json` entries alongside the observed-to-managed review path and observed-only kill action.
+The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, wires real lifecycle control for Mewl-owned services, and now adds restart policies plus a persisted automation history feed on top of the Managed workspace cleanup flow, observed-to-managed review path, and observed-only kill action.
 
 ## Technical Summary
 
@@ -34,6 +34,7 @@ The current implementation includes:
 - explicit observed-runtime action panels that can prefill a managed draft or terminate only the current observed pid
 - a dedicated Managed page for explicit service definitions, lifecycle controls, and visual metadata
 - a managed cleanup banner, review badges, and editor actions for imported legacy service definitions that still need confirmation
+- restart-policy controls in the managed editor so services can stay manual, retry on failure, or always come back with bounded attempts
 - a prefilled managed-draft review state that carries observed command and cwd context into the editor before anything is saved
 - explicit `managed` and `observed` ownership tags on process surfaces without extra warning copy cluttering the cards
 - a collapsed process-card layout that keeps the grid tidy by moving long command text into the expanded panel
@@ -75,6 +76,7 @@ Holds the shared TypeScript runtime contract used by both the renderer and the E
 - monitor metrics
 - optional GPU telemetry metadata, including availability and display labels for hosts without readable GPU counters
 - automation rules
+- automation history entries for manual actions, runtime boot flows, profiles, policy retries, and failures
   This file is the current contract surface for the live Electron adapter.
 
 ### `src/runtime/provider.ts`
@@ -110,6 +112,7 @@ The current implementation:
 - validates managed commands before spawn by tokenizing plain command strings, requiring a real executable token, and checking available reserved ports
 - still normalizes older config records on load so earlier command-and-args entries migrate into the newer explicit command schema before the runtime snapshot is built
 - now persists review metadata for legacy-managed entries so the renderer can explain what was normalized and let users mark the cleanup as complete
+- now persists automation history entries and bounded restart-policy settings in the managed config so automation behavior remains explainable across renderer refreshes
 - keeps discovered host processes read-only so Mewl does not send lifecycle signals to processes it does not own
 - now exposes a separate observed kill path that can terminate a live pid only when it is not already claimed by a managed service
 
@@ -164,6 +167,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - process cards can expand in place for more detail before the full inspector is needed
 - managed-service editor changes and automation toggles round-trip through the Electron bridge
 - managed lifecycle actions and explicit command hooks append to stdout/stderr log tails from the live runtime
+- automation history now records manual actions, runtime autostarts, profile runs, unexpected exits, and policy retries so the Automation page can explain what happened
 - observed-process draft creation jumps directly into the Managed workspace with a review banner and prefilled launch details
 - observed-process termination is framed as a live pid action rather than a managed-service edit
 - button glow behavior follows Sparklebots interaction patterns

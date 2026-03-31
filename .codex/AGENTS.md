@@ -53,7 +53,7 @@
 - Electron is the required host bridge for live runtime hydration; there is no browser-only fallback.
 - Renderer runtime access flows through `src/runtime/provider.ts` and the Electron files in `electron/`.
 - Treat `managed` services as explicit, user-controlled definitions and `observed` processes as live host rows that are read-only unless intentionally promoted.
-- The primary workspace views are Overview, Processes, Ports, Monitor, and Automation.
+- The primary workspace views are Overview, Processes, Managed, Ports, Monitor, and Automation.
 - Keep Pink Pixel branding consistent with the core colors: pink `#ec4899` and purple `#8b5cf6`.
 
 ## Build and Test
@@ -117,7 +117,7 @@ npm run preview  # Preview production build
 
 | File                    | Purpose                                                                                                                                  |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/App.tsx`           | Main shell: navigation rail, 5 workspace views, search/filter, alerts tray, lifecycle handlers                                           |
+| `src/App.tsx`           | Main shell: navigation rail, 6 workspace views, search/filter, alerts tray, lifecycle handlers                                           |
 | `src/components/ui.tsx` | Reusable UI **Building Blocks**: `StatusPill`, `ShinyButton`, `SugarCard`, `CandyInput`, `SweetToggle`, `HologramProgress`, `SignalBars` |
 | `src/data/runtime.ts`   | **Contract layer** for mock process/port/alert/automation data (integration point for real runtime adapter)                              |
 | `src/styles.css`        | Design system: gradients, overlays, glass panels, animations, Google fonts                                                               |

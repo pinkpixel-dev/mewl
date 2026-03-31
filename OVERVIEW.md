@@ -25,7 +25,7 @@ Defines the main product shell, workspace views, action handlers, search/filter 
 
 The current implementation includes:
 
-- a collapsible left navigation rail for overview, processes, ports, monitor, and automation
+- a collapsible left navigation rail for overview, processes, managed, ports, monitor, and automation
 - a compact action/search header with no large banner copy
 - a rose-accented shared search field that matches the Pink Pixel brand color
 - a clean dashboard made of summary cards plus short process and port preview lists
@@ -107,7 +107,7 @@ The current implementation:
 - persists managed `autoStart` and `watchPorts` changes back into `mewl.services.json` through the preload bridge
 - applies enabled startup profiles on Electron boot and lets the Automation view trigger grouped start/stop presets
 - validates managed commands before spawn by tokenizing plain command strings, requiring a real executable token, and checking available reserved ports
-- still normalizes older config records on load so earlier command-and-args entries migrate into the newer explicit command schema
+- still normalizes older config records on load so earlier command-and-args entries migrate into the newer explicit command schema before the runtime snapshot is built
 - keeps discovered host processes read-only so Mewl does not send lifecycle signals to processes it does not own
 - now exposes a separate observed kill path that can terminate a live pid only when it is not already claimed by a managed service
 

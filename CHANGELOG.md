@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 14:25 EDT
+
+- audited the shipped app against the roadmap and marked the already-landed Observed-versus-Managed milestones as complete, including runtime metadata hydration, observed/runtime separation, and legacy managed-config normalization
+- corrected the project docs and instruction files so they now reflect the six-view workspace model with the dedicated `Managed` page
+- revalidated the docs-only alignment pass against the current code structure before the next feature slice
+
 ## 2026-03-31 13:48 EDT
 
 - tightened the Processes page card layout so long process names, descriptions, commands, and working-directory paths now wrap inside expanded cards instead of spilling past the edge

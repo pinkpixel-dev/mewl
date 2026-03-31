@@ -148,7 +148,7 @@ Managed service launches are now intentionally strict: Mewl tokenizes plain comm
 
 The current product direction is intentionally utility-first rather than dashboard wallpaper:
 
-- collapsible left navigation rail for overview, processes, ports, monitor, and automation
+- collapsible left navigation rail for overview, processes, managed, ports, monitor, and automation
 - a dedicated Managed workspace for user-authored service cards and lifecycle control
 - compact operational header with search, scan, and alert tray instead of hero copy
 - the shared search field now uses the Pink Pixel rose accent for its icon and focus glow
@@ -173,6 +173,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - startup profiles that can boot or quiet groups of Mewl-owned services through the Electron bridge
 - hardened managed service execution rules so the desktop bridge only launches validated commands with controlled environments
 - the current product step is the first half of the `Observed` / `Managed` split, with `Managed` now owning saved service definitions and the live Processes page staying visually lighter
+- older inferred managed config entries now normalize into the explicit saved-service schema during load so the runtime can separate remembered service definitions from current host processes
 - Pink Pixel branding applied without turning the app into a generic purple SaaS grid
 
 ## Brand

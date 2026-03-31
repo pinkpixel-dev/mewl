@@ -5,6 +5,7 @@ const {
   performProcessAction,
   shutdownManagedServices,
   updateManagedService,
+  applyAutomationRule,
 } = require("./runtime.cjs");
 
 const devServerUrl = process.env.MEWL_RENDERER_URL;
@@ -42,6 +43,9 @@ async function bootstrap() {
   );
   ipcMain.handle("mewl:update-managed-service", async (_event, payload) =>
     updateManagedService(payload.processId, payload.updates),
+  );
+  ipcMain.handle("mewl:apply-automation-rule", async (_event, payload) =>
+    applyAutomationRule(payload.ruleId, payload.enabled),
   );
 
   await app.whenReady();

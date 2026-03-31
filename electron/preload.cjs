@@ -7,4 +7,6 @@ contextBridge.exposeInMainWorld("mewlHost", {
     ipcRenderer.invoke("mewl:process-action", { action, processId }),
   updateManagedService: (processId, updates) =>
     ipcRenderer.invoke("mewl:update-managed-service", { processId, updates }),
+  applyAutomationRule: (ruleId, enabled) =>
+    ipcRenderer.invoke("mewl:apply-automation-rule", { ruleId, enabled }),
 });

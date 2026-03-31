@@ -14,6 +14,7 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Load live processes, listening ports, and host telemetry through an Electron preload bridge when running in the desktop shell
 - Start, stop, and restart Mewl-owned services through a config-driven Electron lifecycle bridge
 - Update managed `autostart` and `watch ports` settings from the UI and persist them back to `mewl.services.json`
+- Boot managed startup profiles and quiet-mode presets through the Electron Automation view
 - Review a port registry with exposure, conflict, and watched-binding states
 - Track host CPU, memory, disk, and network pressure from the sidebar and monitor view
 - Recover gracefully with loading, empty, and error states while the workspace runtime hydrates
@@ -72,6 +73,7 @@ npm run dev:desktop
 
 Managed desktop services are defined in [`mewl.services.json`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/mewl.services.json). Mewl only performs lifecycle control for services listed there, while other discovered host processes stay read-only.
 Those same managed services now drive the inspector toggles and Electron automation rules, so the UI edits the real desktop config instead of local-only state.
+Profiles in that same file can now boot or quiet grouped services through the Automation page, and enabled startup profiles are applied when the Electron runtime hydrates.
 
 ## Project Structure
 
@@ -122,6 +124,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - a live Electron host bridge that can scan the current user session for processes, ports, and machine pressure
 - config-driven managed services so desktop lifecycle actions only touch processes Mewl explicitly owns
 - managed service settings that round-trip between the React UI and `mewl.services.json`
+- startup profiles that can boot or quiet groups of Mewl-owned services through the Electron bridge
 - Pink Pixel branding applied without turning the app into a generic purple SaaS grid
 
 ## Brand

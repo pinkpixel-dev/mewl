@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 08:06 EDT
+
+- extended `mewl.services.json` with startup profiles so grouped managed services can be booted or quieted through the Electron bridge
+- taught the Electron runtime to apply enabled autostart services and boot profiles during hydration
+- wired the Automation page to real profile actions so toggling quiet mode now parks the managed preview service instead of only changing UI state
+- verified the grouped startup flow by hydrating the runtime, confirming both managed services booted, enabling quiet mode, and then restoring the config
+- revalidated the web build with a successful `npm run build`
+
 ## 2026-03-31 07:39 EDT
 
 - extended the Electron bridge so managed service settings can be updated from the renderer and persisted back to `mewl.services.json`

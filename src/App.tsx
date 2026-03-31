@@ -856,21 +856,16 @@ function App() {
     const rule = automationRules.find((item) => item.id === ruleId);
 
     if (isLiveElectronRuntime) {
-      const match = ruleId.match(/^service-(autostart|watch):(.+)$/);
-      const updateManagedService = window.mewlHost?.updateManagedService;
+      const applyAutomationRule = window.mewlHost?.applyAutomationRule;
 
-      if (!match || !updateManagedService) {
+      if (!applyAutomationRule) {
         setCommandState("This automation toggle is not wired to a live desktop setting yet.");
         return;
       }
 
-      const [, setting, processId] = match;
-      const updates =
-        setting === "autostart" ? { autoStart: nextValue } : { watchPorts: nextValue };
-
       startActionTransition(async () => {
         try {
-          const result = await updateManagedService(processId, updates);
+          const result = await applyAutomationRule(ruleId, nextValue);
           applyRuntimeActionResult(result);
         } catch (error) {
           setCommandState(

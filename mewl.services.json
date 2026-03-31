@@ -10,9 +10,43 @@
       "runtime": "python",
       "group": "workspace",
       "watchPorts": true,
-      "autoStart": false,
+      "autoStart": true,
       "ports": [4011],
       "env": {}
+    },
+    {
+      "id": "workspace-preview",
+      "name": "workspace-preview",
+      "description": "Second managed HTTP server for trying grouped startup and quiet-mode behavior inside Mewl.",
+      "command": "python3",
+      "args": ["-m", "http.server", "4012", "--bind", "127.0.0.1"],
+      "cwd": ".",
+      "runtime": "python",
+      "group": "workspace",
+      "watchPorts": true,
+      "autoStart": false,
+      "ports": [4012],
+      "env": {}
+    }
+  ],
+  "profiles": [
+    {
+      "id": "workspace-core",
+      "title": "Boot workspace core",
+      "detail": "Bring up the starter local sandbox services when the managed workspace boots.",
+      "cadence": "session start",
+      "enabled": true,
+      "action": "start",
+      "serviceIds": ["workspace-sandbox", "workspace-preview"]
+    },
+    {
+      "id": "quiet-mode",
+      "title": "Quiet mode",
+      "detail": "Park the extra preview service when you only need the smallest local sandbox running.",
+      "cadence": "manual profile",
+      "enabled": false,
+      "action": "stop",
+      "serviceIds": ["workspace-preview"]
     }
   ]
 }

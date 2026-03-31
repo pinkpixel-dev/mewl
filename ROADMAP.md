@@ -43,6 +43,7 @@
 - The desktop shell now includes `electron/main.cjs`, `electron/preload.cjs`, and `electron/runtime.cjs` for a first live host scan.
 - `mewl.services.json` now defines Mewl-owned services that can be started, stopped, and restarted through the Electron bridge.
 - Managed autostart and watch-port settings now persist through the Electron bridge and drive the Automation view.
+- Startup profiles and quiet-mode presets can now control grouped managed services, and enabled boot profiles are applied on Electron hydration.
 - The temporary mock path still exists for the browser build, but the intended end state is no mock fallback once the Electron bridge owns the full runtime.
 
 ## Phase 4: Monitoring and Automation

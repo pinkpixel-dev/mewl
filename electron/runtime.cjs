@@ -11,6 +11,7 @@ const oneMegabyte = 1024 * 1024;
 const managedLogTailLimit = 12;
 const serviceConfigPath = path.join(process.cwd(), "mewl.services.json");
 const managedServiceState = new Map();
+let autoStartInitialized = false;
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -422,15 +423,17 @@ async function readPortBindings() {
     .filter(Boolean);
 }
 
-async function loadServiceDefinitions() {
+async function loadManagedConfig() {
   try {
     const raw = await fs.readFile(serviceConfigPath, "utf8");
     const parsed = JSON.parse(raw);
     const services = Array.isArray(parsed.services) ? parsed.services : [];
+    const profiles = Array.isArray(parsed.profiles) ? parsed.profiles : [];
 
-    return services
-      .filter((service) => typeof service.id === "string" && typeof service.command === "string")
-      .map((service) => ({
+    return {
+      services: services
+        .filter((service) => typeof service.id === "string" && typeof service.command === "string")
+        .map((service) => ({
         id: service.id,
         name: typeof service.name === "string" ? service.name : service.id,
         description:
@@ -455,20 +458,37 @@ async function loadServiceDefinitions() {
                 Object.entries(service.env).filter(([, value]) => typeof value === "string"),
               )
             : {},
-      }));
+        })),
+      profiles: profiles
+        .filter((profile) => typeof profile.id === "string")
+        .map((profile) => ({
+          id: profile.id,
+          title: typeof profile.title === "string" ? profile.title : profile.id,
+          detail:
+            typeof profile.detail === "string"
+              ? profile.detail
+              : "Managed startup profile for the Electron runtime bridge.",
+          cadence: typeof profile.cadence === "string" ? profile.cadence : "manual profile",
+          enabled: profile.enabled === true,
+          action: profile.action === "stop" ? "stop" : "start",
+          serviceIds: Array.isArray(profile.serviceIds)
+            ? profile.serviceIds.filter((value) => typeof value === "string")
+            : [],
+        })),
+    };
   } catch (error) {
     if (error && typeof error === "object" && error.code === "ENOENT") {
-      return [];
+      return { services: [], profiles: [] };
     }
 
     throw error;
   }
 }
 
-async function saveServiceDefinitions(services) {
+async function saveManagedConfig(config) {
   await fs.writeFile(
     serviceConfigPath,
-    `${JSON.stringify({ services }, null, 2)}\n`,
+    `${JSON.stringify(config, null, 2)}\n`,
     "utf8",
   );
 }
@@ -583,8 +603,9 @@ function waitForChildExit(child) {
   });
 }
 
-function buildAutomationRules(services) {
-  return services.flatMap((service) => [
+function buildAutomationRules(services, profiles) {
+  return [
+    ...services.flatMap((service) => [
     {
       id: `service-autostart:${service.id}`,
       title: `${service.name} autostart`,
@@ -599,7 +620,15 @@ function buildAutomationRules(services) {
       cadence: "live scan",
       enabled: service.watchPorts,
     },
-  ]);
+    ]),
+    ...profiles.map((profile) => ({
+      id: `profile:${profile.id}`,
+      title: profile.title,
+      detail: profile.detail,
+      cadence: profile.cadence,
+      enabled: profile.enabled,
+    })),
+  ];
 }
 
 async function stopManagedService(service) {
@@ -649,6 +678,28 @@ async function restartManagedService(service) {
 
   await startManagedService(service);
   return `Restarted ${service.name}.`;
+}
+
+async function initializeManagedServices() {
+  if (autoStartInitialized) {
+    return;
+  }
+
+  autoStartInitialized = true;
+  const { services, profiles } = await loadManagedConfig();
+
+  for (const service of services.filter((item) => item.autoStart)) {
+    await startManagedService(service);
+  }
+
+  for (const profile of profiles.filter((item) => item.enabled && item.action === "start")) {
+    for (const serviceId of profile.serviceIds) {
+      const service = services.find((item) => item.id === serviceId);
+      if (service) {
+        await startManagedService(service);
+      }
+    }
+  }
 }
 
 function buildAlerts(processes, ports, metrics, services) {
@@ -725,15 +776,18 @@ function buildAlerts(processes, ports, metrics, services) {
 }
 
 async function hydrateRuntimeSnapshot() {
-  const [cpuPercent, networkUsage, diskPercent, rawProcesses, rawBindings, services] =
+  await initializeManagedServices();
+
+  const [cpuPercent, networkUsage, diskPercent, rawProcesses, rawBindings, config] =
     await Promise.all([
       sampleCpuUsage(),
       sampleNetworkUsage(),
       readDiskUsage(),
       readUserProcesses(),
       readPortBindings(),
-      loadServiceDefinitions(),
+      loadManagedConfig(),
     ]);
+  const { services, profiles } = config;
 
   const memoryPercent = clamp(
     Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100),
@@ -923,7 +977,7 @@ async function hydrateRuntimeSnapshot() {
     ports,
     alerts: buildAlerts([...managedProcesses, ...discoveredProcesses], ports, metrics, services),
     monitorMetrics: [metrics.cpu, metrics.memory, metrics.disk, metrics.network],
-    automationRules: buildAutomationRules(services),
+    automationRules: buildAutomationRules(services, profiles),
   };
 }
 
@@ -935,7 +989,7 @@ async function performProcessAction(action, processId) {
     };
   }
 
-  const services = await loadServiceDefinitions();
+  const { services } = await loadManagedConfig();
   const service = services.find((item) => item.id === processId);
 
   if (!service) {
@@ -960,25 +1014,27 @@ async function performProcessAction(action, processId) {
 }
 
 async function updateManagedService(processId, updates) {
-  const services = await loadServiceDefinitions();
-  const serviceIndex = services.findIndex((service) => service.id === processId);
+  const config = await loadManagedConfig();
+  const serviceIndex = config.services.findIndex((service) => service.id === processId);
 
   if (serviceIndex === -1) {
     throw new Error("Only configured Mewl-managed services can be edited from the desktop bridge.");
   }
 
   const nextService = {
-    ...services[serviceIndex],
+    ...config.services[serviceIndex],
     autoStart:
-      typeof updates.autoStart === "boolean" ? updates.autoStart : services[serviceIndex].autoStart,
+      typeof updates.autoStart === "boolean"
+        ? updates.autoStart
+        : config.services[serviceIndex].autoStart,
     watchPorts:
       typeof updates.watchPorts === "boolean"
         ? updates.watchPorts
-        : services[serviceIndex].watchPorts,
+        : config.services[serviceIndex].watchPorts,
   };
 
-  services[serviceIndex] = nextService;
-  await saveServiceDefinitions(services);
+  config.services[serviceIndex] = nextService;
+  await saveManagedConfig(config);
 
   return {
     snapshot: await hydrateRuntimeSnapshot(),
@@ -986,8 +1042,57 @@ async function updateManagedService(processId, updates) {
   };
 }
 
+async function applyAutomationRule(ruleId, enabled) {
+  const config = await loadManagedConfig();
+
+  if (ruleId.startsWith("service-autostart:")) {
+    const processId = ruleId.replace("service-autostart:", "");
+    return updateManagedService(processId, { autoStart: enabled });
+  }
+
+  if (ruleId.startsWith("service-watch:")) {
+    const processId = ruleId.replace("service-watch:", "");
+    return updateManagedService(processId, { watchPorts: enabled });
+  }
+
+  if (ruleId.startsWith("profile:")) {
+    const profileId = ruleId.replace("profile:", "");
+    const profileIndex = config.profiles.findIndex((profile) => profile.id === profileId);
+
+    if (profileIndex === -1) {
+      throw new Error("The requested startup profile was not found in mewl.services.json.");
+    }
+
+    const profile = { ...config.profiles[profileIndex], enabled };
+    config.profiles[profileIndex] = profile;
+    await saveManagedConfig(config);
+
+    for (const serviceId of profile.serviceIds) {
+      const service = config.services.find((item) => item.id === serviceId);
+      if (!service) {
+        continue;
+      }
+
+      if (profile.action === "start" && enabled) {
+        await startManagedService(service);
+      }
+
+      if (profile.action === "stop" && enabled) {
+        await stopManagedService(service);
+      }
+    }
+
+    return {
+      snapshot: await hydrateRuntimeSnapshot(),
+      message: `${profile.title} ${enabled ? "enabled" : "disabled"}.`,
+    };
+  }
+
+  throw new Error("This automation rule is not managed by the Electron bridge.");
+}
+
 async function shutdownManagedServices() {
-  const services = await loadServiceDefinitions();
+  const { services } = await loadManagedConfig();
 
   for (const service of services) {
     const serviceState = getManagedState(service.id);
@@ -1001,5 +1106,6 @@ module.exports = {
   hydrateRuntimeSnapshot,
   performProcessAction,
   updateManagedService,
+  applyAutomationRule,
   shutdownManagedServices,
 };

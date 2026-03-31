@@ -1,4 +1,8 @@
-import { type ManagedServiceDraft, type RuntimeSnapshot } from "../data/runtime";
+import {
+  type ManagedServiceDraft,
+  type ManagedServiceUpdate,
+  type RuntimeSnapshot,
+} from "../data/runtime";
 
 export type HostLayerChoice = "electron";
 
@@ -28,7 +32,7 @@ export type MewlHostBridge = {
   ) => Promise<RuntimeActionResult>;
   updateManagedService?: (
     processId: string,
-    updates: Partial<ManagedServiceDraft>,
+    updates: ManagedServiceUpdate,
   ) => Promise<RuntimeActionResult>;
   createManagedService?: (service: ManagedServiceDraft) => Promise<RuntimeActionResult>;
   removeManagedService?: (processId: string) => Promise<RuntimeActionResult>;

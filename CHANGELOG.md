@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 14:30 EDT
+
+- added a Managed cleanup flow for legacy `mewl.services.json` entries, including persisted review metadata from the Electron normalization layer and in-app confirmation actions
+- surfaced cleanup-only filtering, per-card review badges, and editor-side review notes so imported service definitions can be corrected intentionally instead of silently rewritten
+- refreshed the README, overview, roadmap, and project instructions to document the new legacy-config cleanup path
+- revalidated the app with a successful `npm run build`
+
 ## 2026-03-31 14:25 EDT
 
 - audited the shipped app against the roadmap and marked the already-landed Observed-versus-Managed milestones as complete, including runtime metadata hydration, observed/runtime separation, and legacy managed-config normalization

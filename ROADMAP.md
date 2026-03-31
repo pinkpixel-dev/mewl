@@ -105,7 +105,7 @@ This is the main UX split the product now points toward:
 
 - [x] Add a guided flow to create a managed service from an observed process by pre-filling a new managed card instead of silently promoting the live row as-is
 - [x] Let the guided flow capture the launch command, cwd, ports, and runtime hints while still requiring the user to confirm the final managed definition
-- [ ] Add import and cleanup affordances for existing `mewl.services.json` entries so old inferred configs can be reviewed and corrected in the new managed editor
+- [x] Add import and cleanup affordances for existing `mewl.services.json` entries so old inferred configs can be reviewed and corrected in the new managed editor
 - [x] Normalize older inferred services into the new explicit schema so the app can clearly separate remembered service definitions from current host processes
 
 #### 4.4 Script, wrapper, and Docker support
@@ -137,7 +137,7 @@ This is the main UX split the product now points toward:
 - The live `Processes` page is now the shipped `Observed` runtime surface, and it stays visually lighter and inspection-first with lifecycle and manage/observe controls removed from those cards and their inspector.
 - The guided create-from-observed review flow and the clearer observed-only kill action are now live.
 - Managed cards now hydrate pid, ports, status, runtime, and heartbeat details directly from the host scan while keeping the saved launch definition user-authored.
-- Older inferred managed config entries now normalize into the explicit command schema on load, while import and cleanup affordances for reviewing that migration in-app remain the next step.
+- Older inferred managed config entries now normalize into the explicit command schema on load, and the Managed workspace can surface cleanup reasons plus let users confirm the migrated definition in-app.
 
 ## Phase 5: Quality and Delivery
 

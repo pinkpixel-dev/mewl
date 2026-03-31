@@ -37,6 +37,12 @@ export type ManagedServiceIcon =
   | "workflow"
   | "sparkles";
 
+export type ManagedServiceReview = {
+  needsReview: boolean;
+  source: "legacy-config";
+  reasons: string[];
+};
+
 export type ManagedProcess = {
   id: string;
   name: string;
@@ -63,6 +69,7 @@ export type ManagedProcess = {
   managed: boolean;
   titleColor?: ManagedServiceColor;
   icon?: ManagedServiceIcon;
+  review?: ManagedServiceReview | null;
   logs: ProcessLogs;
 };
 
@@ -77,6 +84,10 @@ export type ManagedServiceDraft = {
   watchPorts: boolean;
   titleColor: ManagedServiceColor;
   icon: ManagedServiceIcon;
+};
+
+export type ManagedServiceUpdate = Partial<ManagedServiceDraft> & {
+  clearReview?: boolean;
 };
 
 export type PortBinding = {

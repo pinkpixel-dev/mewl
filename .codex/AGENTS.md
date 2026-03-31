@@ -126,7 +126,7 @@ npm run preview  # Preview production build
 
 ### Workspace Structure
 
-- 5 main views: Overview, Processes, Ports, Monitor, Automation
+- 6 main views: Overview, Processes, Managed, Ports, Monitor, Automation
 - Collapsible left navigation rail
 - Top action header with search/filter
 - Alerts tray at bottom

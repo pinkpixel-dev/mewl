@@ -19,6 +19,10 @@ const emptyManagedConfig = {
   profiles: [],
 };
 
+function uniqueList(values) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
 function getConfigRootPath() {
   if (process.platform === "win32") {
     return process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
@@ -696,6 +700,58 @@ function sanitizeManagedService(service) {
   };
 }
 
+function getManagedReviewState(service, normalizedService, legacyCommandUsed) {
+  const review =
+    service.review && typeof service.review === "object" && !Array.isArray(service.review)
+      ? service.review
+      : null;
+  const storedReasons = Array.isArray(review?.reasons)
+    ? review.reasons.filter((value) => typeof value === "string" && value.trim().length > 0)
+    : [];
+  const reasons = [...storedReasons];
+
+  if (legacyCommandUsed) {
+    reasons.push(
+      "Start command was imported from the older command/args format and should be reviewed in Managed.",
+    );
+  }
+
+  if (typeof service.description !== "string" || service.description.trim().length === 0) {
+    reasons.push(
+      "Description is still using the default placeholder copy and could use a real service note.",
+    );
+  }
+
+  if (typeof service.cwd !== "string" || service.cwd.trim().length === 0) {
+    reasons.push(
+      "Working directory fell back to `.` from the legacy config and should be confirmed.",
+    );
+  }
+
+  if (
+    typeof service.name !== "string" ||
+    service.name.trim().length === 0 ||
+    service.name.trim() === service.id
+  ) {
+    reasons.push(
+      "Service name still looks inherited from the older config key and may deserve a friendlier label.",
+    );
+  }
+
+  const normalizedReasons = uniqueList(reasons);
+  const needsReview = review?.needsReview === true || normalizedReasons.length > 0;
+
+  if (!needsReview) {
+    return null;
+  }
+
+  return {
+    needsReview: true,
+    source: "legacy-config",
+    reasons: normalizedReasons,
+  };
+}
+
 function getManagedServiceDedupKey(service) {
   return [
     service.name.trim().toLowerCase(),
@@ -878,21 +934,35 @@ async function loadManagedConfig() {
           typeof service.titleColor === "string" ? service.titleColor : "default",
         icon: typeof service.icon === "string" ? service.icon : "server",
       });
+      const review = getManagedReviewState(
+        service,
+        normalizedService,
+        Boolean(legacyCommand && (!service.startCommand || String(service.startCommand).trim().length === 0)),
+      );
+      const normalizedServiceWithReview = review
+        ? {
+            ...normalizedService,
+            review,
+          }
+        : normalizedService;
 
-      const dedupKey = getManagedServiceDedupKey(normalizedService);
+      const dedupKey = getManagedServiceDedupKey(normalizedServiceWithReview);
       if (seenServiceKeys.has(dedupKey)) {
         configChanged = true;
         continue;
       }
 
       seenServiceKeys.add(dedupKey);
-      normalizedServices.push(normalizedService);
+      normalizedServices.push(normalizedServiceWithReview);
 
       if (
-        normalizedService.startCommand !== startCommand ||
-        normalizedService.stopCommand !== (typeof service.stopCommand === "string" ? service.stopCommand.trim() : "") ||
-        normalizedService.restartCommand !==
-          (typeof service.restartCommand === "string" ? service.restartCommand.trim() : "")
+        normalizedServiceWithReview.startCommand !== startCommand ||
+        normalizedServiceWithReview.stopCommand !==
+          (typeof service.stopCommand === "string" ? service.stopCommand.trim() : "") ||
+        normalizedServiceWithReview.restartCommand !==
+          (typeof service.restartCommand === "string" ? service.restartCommand.trim() : "") ||
+        Boolean(review) !== Boolean(service.review?.needsReview) ||
+        JSON.stringify(review?.reasons ?? []) !== JSON.stringify(service.review?.reasons ?? [])
       ) {
         configChanged = true;
       }
@@ -1654,6 +1724,7 @@ async function hydrateRuntimeSnapshot() {
       managed: true,
       titleColor: service.titleColor,
       icon: service.icon,
+      review: service.review ?? null,
       logs: serviceState.logs,
     };
 
@@ -1895,13 +1966,19 @@ async function updateManagedService(processId, updates) {
       typeof updates.titleColor === "string" ? updates.titleColor : previousService.titleColor,
     icon: typeof updates.icon === "string" ? updates.icon : previousService.icon,
   };
+  if (updates.clearReview === true) {
+    delete nextService.review;
+  }
 
   config.services[serviceIndex] = nextService;
   await saveManagedConfig(config);
 
   return {
     snapshot: await hydrateRuntimeSnapshot(),
-    message: `${nextService.name} settings updated.`,
+    message:
+      updates.clearReview === true
+        ? `${nextService.name} no longer needs legacy cleanup review.`
+        : `${nextService.name} settings updated.`,
   };
 }
 

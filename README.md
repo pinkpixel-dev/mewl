@@ -21,6 +21,7 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Load live processes, listening ports, and host telemetry through an Electron preload bridge when running in the desktop shell
 - Start, stop, and restart Mewl-owned services through a config-driven Electron lifecycle bridge
 - Save managed services with explicit start commands, optional stop and restart commands, working directories, notes, colors, and card icons
+- Review imported legacy managed-service entries from older `mewl.services.json` shapes, see why they were normalized, and mark them as cleaned up from the Managed editor
 - Update managed `autostart` and `watch ports` settings from the UI and persist them back to `mewl.services.json`
 - Boot managed startup profiles and quiet-mode presets through the Electron Automation view
 - Launch managed services through a hardened Electron runner with explicit env inheritance, command tokenization, PATH resolution, and reserved-port guards
@@ -52,6 +53,7 @@ This is the first real product pass, not the final native implementation yet.
 - Managed process launching, live port discovery, and host telemetry now run through the Electron preload bridge, with the Processes page staying focused on live inspection and the Managed page owning saved service control.
 - Managed-service configuration now lives in a per-user app config file instead of the repo, so packaged Electron builds can keep using the same settings location.
 - Managed services are now explicit saved definitions with a start command plus optional stop and restart commands instead of inferred promotion from the Processes page.
+- Legacy managed-service entries can now surface cleanup reasons in the Managed workspace so older config shapes are reviewed in-app instead of being silently rewritten with no follow-up.
 - Observed processes can now seed the Managed editor through an explicit review step instead of being silently promoted straight into saved config.
 - The live Processes page now exposes only two observed-process actions: create a managed draft from what Mewl can currently see, or kill the live pid without changing the managed catalog.
 

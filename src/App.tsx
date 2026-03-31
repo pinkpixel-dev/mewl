@@ -49,6 +49,7 @@ import {
   type ManagedServiceDraft,
   type ManagedServiceIcon,
   type ManagedProcess,
+  type ManagedServiceUpdate,
   type MonitorMetric,
   type PortBinding,
   type ProcessLogEntry,
@@ -353,6 +354,7 @@ function App() {
   const [expandedProcessIds, setExpandedProcessIds] = useState<string[]>([]);
   const [expandedResourceDrawIds, setExpandedResourceDrawIds] = useState<string[]>([]);
   const [managedEditorMode, setManagedEditorMode] = useState<"create" | "edit">("edit");
+  const [managedCleanupOnly, setManagedCleanupOnly] = useState(false);
   const [managedDraft, setManagedDraft] = useState<ManagedServiceDraft>(createEmptyManagedDraft);
   const [managedPrefillSourceId, setManagedPrefillSourceId] = useState("");
   const [processes, setProcesses] = useState<ManagedProcess[]>([]);
@@ -566,6 +568,12 @@ function App() {
     managedPrefillSourceId.length > 0
       ? processes.find((process) => process.id === managedPrefillSourceId && !process.managed) ?? null
       : null;
+  const managedServicesNeedingReview = managedServices.filter(
+    (process) => process.review?.needsReview,
+  );
+  const visibleManagedServices = managedCleanupOnly
+    ? managedServicesNeedingReview
+    : managedServices;
   const canControlProcess = (process: ManagedProcess | null) =>
     runtimeStatus === "ready" && Boolean(process?.managed);
 
@@ -613,6 +621,7 @@ function App() {
     setStatusFilter("all");
     setSidebarCollapsed(false);
     setExpandedProcessIds([]);
+    setManagedCleanupOnly(false);
     setAlertsOpen(false);
     setManagedEditorMode("edit");
     setManagedDraft(createEmptyManagedDraft());
@@ -1088,6 +1097,13 @@ function App() {
     </span>
   );
 
+  const renderManagedReviewTag = (process: ManagedProcess) =>
+    process.review?.needsReview ? (
+      <span className="rounded-full border border-amber-300/18 bg-amber-400/10 px-3 py-1 text-[0.68rem] uppercase tracking-[0.2em] text-amber-100/76">
+        needs cleanup
+      </span>
+    ) : null;
+
   const focusManagedServiceFromSnapshot = (snapshot: RuntimeSnapshot, processId: string) => {
     const matchedProcess =
       snapshot.processes.find((item) => item.id === processId && item.managed) ??
@@ -1176,6 +1192,40 @@ function App() {
     }
 
     setCommandState("Managed services can only be edited from the Electron desktop bridge.");
+  };
+
+  const confirmManagedReview = (processId: string) => {
+    if (runtimeStatus !== "ready") {
+      return;
+    }
+
+    if (isLiveElectronRuntime) {
+      const updateManagedService = window.mewlHost?.updateManagedService;
+
+      if (!updateManagedService) {
+        setCommandState("The Electron bridge is missing its managed-service editor handlers.");
+        return;
+      }
+
+      startActionTransition(async () => {
+        try {
+          const result = await updateManagedService(processId, {
+            clearReview: true,
+          } satisfies ManagedServiceUpdate);
+          applyRuntimeActionResult(result);
+          focusManagedServiceFromSnapshot(result.snapshot, processId);
+        } catch (error) {
+          setCommandState(
+            error instanceof Error
+              ? error.message
+              : "The desktop bridge could not confirm that cleanup review.",
+          );
+        }
+      });
+      return;
+    }
+
+    setCommandState("Managed cleanup review can only be confirmed from the Electron desktop bridge.");
   };
 
   const removeManagedDraft = () => {
@@ -1927,8 +1977,54 @@ function App() {
         </div>
 
         <div className="mt-6 space-y-3">
-          {managedServices.length > 0 ? (
-            managedServices.map((process) => {
+          {managedServicesNeedingReview.length > 0 ? (
+            <div className="rounded-[24px] border border-amber-300/16 bg-amber-400/8 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-[0.72rem] uppercase tracking-[0.22em] text-amber-100/72">
+                    Legacy Config Cleanup
+                  </p>
+                  <p className="mt-2 max-w-2xl text-sm text-white/66">
+                    {managedServicesNeedingReview.length} managed service
+                    {managedServicesNeedingReview.length === 1 ? "" : "s"} were normalized from an
+                    older `mewl.services.json` shape and still need a quick review in the editor.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setManagedCleanupOnly((current) => !current)}
+                    className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition duration-300 ${
+                      managedCleanupOnly
+                        ? "border-amber-200/26 bg-amber-300/16 text-amber-50"
+                        : "border-white/8 bg-black/18 text-white/66 hover:text-white"
+                    }`}
+                  >
+                    {managedCleanupOnly ? "Show All" : "Show Cleanup Only"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const firstPending = managedServicesNeedingReview[0];
+                      if (!firstPending) {
+                        return;
+                      }
+
+                      setManagedEditorMode("edit");
+                      setSelectedManagedServiceId(firstPending.id);
+                      setSelectedProcessId(firstPending.id);
+                    }}
+                    className="rounded-full border border-white/8 bg-black/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
+                  >
+                    Review First
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {visibleManagedServices.length > 0 ? (
+            visibleManagedServices.map((process) => {
               const isSelected = selectedManagedService?.id === process.id && managedEditorMode === "edit";
               const titleHex = managedServiceColorMap[process.titleColor ?? "default"];
               const Icon = managedServiceIconMap[process.icon ?? "server"];
@@ -1982,9 +2078,22 @@ function App() {
 
                     <div className="flex flex-col items-end gap-2">
                       <StatusPill tone={processToneMap[process.status]} label={process.status} />
+                      {renderManagedReviewTag(process)}
                       {renderProcessOwnershipTag(process)}
                     </div>
                   </div>
+
+                  {process.review?.needsReview ? (
+                    <div className="mt-4 rounded-[18px] border border-amber-300/14 bg-amber-400/8 px-4 py-3">
+                      <p className="text-[0.68rem] uppercase tracking-[0.18em] text-amber-100/72">
+                        Cleanup Notes
+                      </p>
+                      <p className="mt-2 text-sm text-white/64">
+                        {process.review.reasons[0] ??
+                          "This service was normalized from an older config entry and should be confirmed."}
+                      </p>
+                    </div>
+                  ) : null}
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
                     {[
@@ -2007,6 +2116,15 @@ function App() {
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/8 pt-4">
                     {renderManagedLifecycleIcons(process)}
                     <div className="flex items-center gap-2">
+                      {process.review?.needsReview
+                        ? renderManagedActionButton({
+                            label: "Confirm cleanup review",
+                            icon: ShieldCheck,
+                            hex: accent.amber,
+                            onClick: () => confirmManagedReview(process.id),
+                            disabled: isPending || runtimeStatus !== "ready",
+                          })
+                        : null}
                       {renderManagedActionButton({
                         label: "Edit service",
                         icon: PenSquare,
@@ -2023,8 +2141,9 @@ function App() {
             })
           ) : (
             <div className="rounded-[28px] border border-dashed border-white/10 bg-black/18 px-5 py-8 text-sm text-white/52">
-              Create your first managed service to give Mewl a real launch definition instead of
-              relying on a discovered process snapshot.
+              {managedCleanupOnly
+                ? "No managed services still need cleanup review right now. Switch back to the full command deck to see every saved service."
+                : "Create your first managed service to give Mewl a real launch definition instead of relying on a discovered process snapshot."}
             </div>
           )}
         </div>
@@ -2092,6 +2211,45 @@ function App() {
                     {managedPrefillSource.cwd}
                   </p>
                 </div>
+              </div>
+            </div>
+          ) : null}
+
+          {managedEditorMode === "edit" && selectedManagedService?.review?.needsReview ? (
+            <div className="rounded-[24px] border border-amber-300/16 bg-amber-400/8 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-[0.72rem] uppercase tracking-[0.22em] text-amber-100/72">
+                    Cleanup This Imported Service
+                  </p>
+                  <p className="mt-2 text-sm text-white/66">
+                    This saved definition was normalized from an older `mewl.services.json` entry.
+                    Confirm the details below once they look right.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => confirmManagedReview(selectedManagedService.id)}
+                  disabled={isPending || runtimeStatus !== "ready"}
+                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition duration-300 ${
+                    isPending || runtimeStatus !== "ready"
+                      ? "cursor-not-allowed border-white/8 bg-black/18 text-white/34"
+                      : "border-amber-200/26 bg-amber-300/16 text-amber-50 hover:border-amber-100/36"
+                  }`}
+                >
+                  <ShieldCheck size={14} />
+                  Mark Reviewed
+                </button>
+              </div>
+              <div className="mt-4 grid gap-3">
+                {selectedManagedService.review.reasons.map((reason) => (
+                  <div
+                    key={reason}
+                    className="rounded-[18px] border border-white/8 bg-black/18 px-4 py-3 text-sm text-white/72"
+                  >
+                    {reason}
+                  </div>
+                ))}
               </div>
             </div>
           ) : null}

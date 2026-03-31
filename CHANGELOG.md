@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 06:33 EDT
+
+- hydrated the workspace from the runtime contract on boot and persisted local session state for views, filters, selected process, expanded cards, alerts, and automation changes
+- added structured per-process stdout and stderr panes in the inspector and appended lifecycle and settings changes into the mock log history
+- introduced runtime loading, empty, and error states plus a local session reset path so the shell behaves cleanly when no filtered data matches or saved state fails to load
+- revalidated the application with a successful `npm run build`
+
 ## 2026-03-31 06:05 EDT
 
 - raised the top command bar and alerts tray stacking order so the notifications popover stays readable above the dashboard cards

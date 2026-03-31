@@ -6,6 +6,20 @@ export type PortStatus = "bound" | "booting" | "standby" | "conflict";
 
 export type AlertSeverity = "info" | "warning" | "critical";
 
+export type ProcessLogLevel = "info" | "debug" | "warning" | "error";
+
+export type ProcessLogEntry = {
+  id: string;
+  stamp: string;
+  level: ProcessLogLevel;
+  text: string;
+};
+
+export type ProcessLogs = {
+  stdout: ProcessLogEntry[];
+  stderr: ProcessLogEntry[];
+};
+
 export type ManagedProcess = {
   id: string;
   name: string;
@@ -23,8 +37,10 @@ export type ManagedProcess = {
   uptime: string;
   restarts: number;
   lastExit: string;
+  lastHeartbeat: string;
   autoStart: boolean;
   watchPorts: boolean;
+  logs: ProcessLogs;
 };
 
 export type PortBinding = {
@@ -62,6 +78,20 @@ export type AutomationRule = {
   enabled: boolean;
 };
 
+export type RuntimeSnapshot = {
+  processes: ManagedProcess[];
+  ports: PortBinding[];
+  alerts: AlertRecord[];
+  monitorMetrics: MonitorMetric[];
+  automationRules: AutomationRule[];
+};
+
+export const mockRuntimeBootDelayMs = 420;
+
+const stdout = (...entries: ProcessLogEntry[]): ProcessLogEntry[] => entries;
+
+const stderr = (...entries: ProcessLogEntry[]): ProcessLogEntry[] => entries;
+
 export const initialProcesses: ManagedProcess[] = [
   {
     id: "web-ui",
@@ -80,8 +110,32 @@ export const initialProcesses: ManagedProcess[] = [
     uptime: "1h 18m",
     restarts: 1,
     lastExit: "Clean exit before current boot",
+    lastHeartbeat: "8s ago",
     autoStart: true,
     watchPorts: true,
+    logs: {
+      stdout: stdout(
+        {
+          id: "web-ui-out-1",
+          stamp: "06:03:14",
+          level: "info",
+          text: "Vite dev server accepted the dedicated Mewl workspace port 29463.",
+        },
+        {
+          id: "web-ui-out-2",
+          stamp: "06:03:28",
+          level: "debug",
+          text: "Hot module graph settled after the latest shell layout refresh.",
+        },
+        {
+          id: "web-ui-out-3",
+          stamp: "06:04:02",
+          level: "info",
+          text: "Workspace search and command strip are responsive after hydration.",
+        },
+      ),
+      stderr: stderr(),
+    },
   },
   {
     id: "api-core",
@@ -100,8 +154,45 @@ export const initialProcesses: ManagedProcess[] = [
     uptime: "43m",
     restarts: 3,
     lastExit: "Recovered after EADDRINUSE on 4010",
+    lastHeartbeat: "14s ago",
     autoStart: true,
     watchPorts: true,
+    logs: {
+      stdout: stdout(
+        {
+          id: "api-core-out-1",
+          stamp: "05:52:09",
+          level: "info",
+          text: "HTTP listener bound on 127.0.0.1:4000 with debugger sidecar enabled.",
+        },
+        {
+          id: "api-core-out-2",
+          stamp: "05:52:16",
+          level: "debug",
+          text: "Schema cache warmed from the local Postgres snapshot in 182ms.",
+        },
+        {
+          id: "api-core-out-3",
+          stamp: "05:53:41",
+          level: "warning",
+          text: "Shadow process detection left the reserved 4010 handoff port in watch mode.",
+        },
+      ),
+      stderr: stderr(
+        {
+          id: "api-core-err-1",
+          stamp: "05:53:39",
+          level: "error",
+          text: "listen EADDRINUSE: address already in use 127.0.0.1:4010",
+        },
+        {
+          id: "api-core-err-2",
+          stamp: "05:53:40",
+          level: "warning",
+          text: "Fallback drain sequence kept the primary API listener healthy on 4000.",
+        },
+      ),
+    },
   },
   {
     id: "queue-worker",
@@ -120,8 +211,26 @@ export const initialProcesses: ManagedProcess[] = [
     uptime: "2h 05m",
     restarts: 0,
     lastExit: "No recent exit",
+    lastHeartbeat: "5s ago",
     autoStart: true,
     watchPorts: false,
+    logs: {
+      stdout: stdout(
+        {
+          id: "queue-worker-out-1",
+          stamp: "05:47:11",
+          level: "info",
+          text: "Webhook fan-out queue resumed with 12 pending deliveries.",
+        },
+        {
+          id: "queue-worker-out-2",
+          stamp: "05:48:02",
+          level: "debug",
+          text: "Scheduler sweep completed with no retry backlog.",
+        },
+      ),
+      stderr: stderr(),
+    },
   },
   {
     id: "postgres-local",
@@ -140,8 +249,26 @@ export const initialProcesses: ManagedProcess[] = [
     uptime: "5h 11m",
     restarts: 0,
     lastExit: "No recent exit",
+    lastHeartbeat: "11s ago",
     autoStart: true,
     watchPorts: true,
+    logs: {
+      stdout: stdout(
+        {
+          id: "postgres-out-1",
+          stamp: "05:40:17",
+          level: "info",
+          text: "Database accepted the latest snapshot replay with zero checksum drift.",
+        },
+        {
+          id: "postgres-out-2",
+          stamp: "05:41:03",
+          level: "debug",
+          text: "WAL activity remains inside the expected local development window.",
+        },
+      ),
+      stderr: stderr(),
+    },
   },
   {
     id: "mailcatcher",
@@ -160,8 +287,20 @@ export const initialProcesses: ManagedProcess[] = [
     uptime: "stopped",
     restarts: 4,
     lastExit: "Exited after manual shutdown",
+    lastHeartbeat: "idle",
     autoStart: false,
     watchPorts: true,
+    logs: {
+      stdout: stdout(
+        {
+          id: "mailcatcher-out-1",
+          stamp: "05:18:51",
+          level: "info",
+          text: "SMTP sink drained cleanly before the tooling profile was parked.",
+        },
+      ),
+      stderr: stderr(),
+    },
   },
   {
     id: "storybook",
@@ -180,8 +319,33 @@ export const initialProcesses: ManagedProcess[] = [
     uptime: "booting",
     restarts: 2,
     lastExit: "Restarting after package refresh",
+    lastHeartbeat: "booting",
     autoStart: false,
     watchPorts: false,
+    logs: {
+      stdout: stdout(
+        {
+          id: "storybook-out-1",
+          stamp: "06:02:19",
+          level: "info",
+          text: "Storybook boot requested after the component skin refresh.",
+        },
+        {
+          id: "storybook-out-2",
+          stamp: "06:02:34",
+          level: "debug",
+          text: "Dependency graph is rebuilding the preview iframe bundle.",
+        },
+      ),
+      stderr: stderr(
+        {
+          id: "storybook-err-1",
+          stamp: "06:02:41",
+          level: "warning",
+          text: "Cold boot exceeded the recent average while package metadata was refreshed.",
+        },
+      ),
+    },
   },
 ];
 
@@ -364,3 +528,44 @@ export const initialAutomationRules: AutomationRule[] = [
     enabled: false,
   },
 ];
+
+const cloneLogEntry = (entry: ProcessLogEntry): ProcessLogEntry => ({ ...entry });
+
+const cloneLogs = (logs: ProcessLogs): ProcessLogs => ({
+  stdout: logs.stdout.map(cloneLogEntry),
+  stderr: logs.stderr.map(cloneLogEntry),
+});
+
+const cloneProcess = (process: ManagedProcess): ManagedProcess => ({
+  ...process,
+  ports: [...process.ports],
+  logs: cloneLogs(process.logs),
+});
+
+const clonePort = (port: PortBinding): PortBinding => ({ ...port });
+
+const cloneAlert = (alert: AlertRecord): AlertRecord => ({ ...alert });
+
+const cloneMonitorMetric = (metric: MonitorMetric): MonitorMetric => ({ ...metric });
+
+const cloneAutomationRule = (rule: AutomationRule): AutomationRule => ({ ...rule });
+
+export function createInitialRuntimeSnapshot(): RuntimeSnapshot {
+  return {
+    processes: initialProcesses.map(cloneProcess),
+    ports: initialPorts.map(clonePort),
+    alerts: initialAlerts.map(cloneAlert),
+    monitorMetrics: initialMonitorMetrics.map(cloneMonitorMetric),
+    automationRules: initialAutomationRules.map(cloneAutomationRule),
+  };
+}
+
+export async function hydrateMockRuntime(
+  delayMs = mockRuntimeBootDelayMs,
+): Promise<RuntimeSnapshot> {
+  await new Promise<void>((resolve) => {
+    globalThis.setTimeout(resolve, delayMs);
+  });
+
+  return createInitialRuntimeSnapshot();
+}

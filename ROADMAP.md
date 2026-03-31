@@ -24,9 +24,9 @@
 - [x] Add a collapsible sidebar with host snapshot details
 - [x] Keep the notifications tray readable above the dashboard surfaces
 - [x] Move the dev server off `5173` to a dedicated fixed port (`29463`)
-- [ ] Add per-process log tails and structured stdout/stderr panes
-- [ ] Add empty, loading, and error states for future live runtime sources
-- [ ] Persist filters, selected views, and workspace preferences
+- [x] Add per-process log tails and structured stdout/stderr panes
+- [x] Add empty, loading, and error states for future live runtime sources
+- [x] Persist filters, selected views, and workspace preferences
 
 ## Phase 3: Native Runtime Bridge
 

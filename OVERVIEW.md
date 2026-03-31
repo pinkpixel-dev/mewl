@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Mewl is a local process and port management app for Pink Pixel. This pass moves the project from a visual scaffold into a front-end product shell for controlling services, reviewing port bindings, and monitoring machine pressure from a single workspace.
+Mewl is a local process and port management app for Pink Pixel. This pass pushes the project from a visual scaffold into a more functional product shell by restoring workspace state, surfacing structured process logs, and handling runtime loading and failure states more deliberately.
 
 ## Technical Summary
 
@@ -18,7 +18,7 @@ Mewl is a local process and port management app for Pink Pixel. This pass moves 
 
 ### `src/App.tsx`
 
-Defines the main product shell, workspace views, action handlers, search/filter state, alerts tray, and process-selection workflow.
+Defines the main product shell, workspace views, action handlers, search/filter state, alerts tray, process-selection workflow, runtime hydration flow, and local session persistence.
 
 The current implementation includes:
 
@@ -28,6 +28,8 @@ The current implementation includes:
 - a dedicated Processes page with expandable cards and a full inspector surface
 - view-specific pages for port registry, monitor, and automation workflows
 - local state transitions that simulate lifecycle actions before a real runtime bridge exists
+- workspace persistence for the active view, filters, expanded cards, selected process, alerts, and automation state
+- loading, empty, and error states for runtime hydration and filtered views
 
 ### `src/components/ui.tsx`
 
@@ -52,10 +54,12 @@ The shared UI layer also now supports:
 Holds the mock runtime model that currently powers the interface:
 
 - managed processes with command, cwd, PID, ports, and resource usage
+- structured stdout and stderr tails for each managed process
 - port registry bindings with exposure and conflict state
 - alerts and incident feed entries
 - monitor metrics
 - automation rules
+- helper functions for cloning and hydrating the runtime snapshot
 
 This file is the current contract surface for the future backend/native adapter.
 
@@ -89,9 +93,11 @@ This structure keeps the app close to the original mockup mood while making the 
 - search input uses `useDeferredValue` to keep filtering responsive
 - workspace changes use `startTransition` to keep view switching lightweight
 - lifecycle actions use `useTransition` to simulate non-blocking start, stop, restart, and scan operations
+- the workspace hydrates from the runtime contract and restores saved session state from local storage on boot
 - the sidebar can collapse to icon-only navigation for a roomier workspace
 - process cards can expand in place for more detail before the full inspector is needed
 - toggles mutate selected-service and automation state locally until a backend exists
+- inspector toggles and lifecycle actions append to stdout/stderr log tails so the mock runtime leaves useful history behind
 - button glow behavior follows Sparklebots interaction patterns
 - progress indicators and animated signal bars add motion without crowding the layout
 - alert visibility uses local `useState` and conditional rendering for the top-right tray
@@ -101,7 +107,6 @@ This structure keeps the app close to the original mockup mood while making the 
 
 - no native process bridge yet, so OS process control is not live
 - no real port inspection or system telemetry ingestion
-- no persistence for settings, filters, or automation rules
 - no auth, multi-user roles, or workspace sync
 - no testing suite yet
 - no packaging for desktop delivery yet
@@ -111,5 +116,5 @@ This structure keeps the app close to the original mockup mood while making the 
 - replace the mock runtime file with a real adapter backed by Electron, Tauri, or a local daemon
 - wire lifecycle actions to spawn, kill, restart, and inspect real processes
 - add live port discovery and collision detection from the host machine
-- persist workspace profiles, startup groups, and automation presets
-- add charts, logs, tails, and richer process detail panes
+- persist workspace profiles, startup groups, and automation presets beyond the single local session model
+- add richer charts, searchable logs, streaming tails, and deeper process detail panes

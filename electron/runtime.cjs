@@ -1387,6 +1387,61 @@ async function restartManagedService(service) {
   return `Restarted ${service.name}.`;
 }
 
+async function killObservedProcess(processId) {
+  await initializeManagedServices();
+
+  const pidMatch = /^pid-(\d+)$/.exec(processId);
+  if (!pidMatch) {
+    throw new Error("The observed kill action only supports live observed process rows.");
+  }
+
+  const pid = Number(pidMatch[1]);
+  if (!Number.isInteger(pid) || pid <= 0) {
+    throw new Error("The observed process pid is invalid.");
+  }
+
+  const [rawProcesses, config] = await Promise.all([readUserProcesses(), loadManagedConfig()]);
+  const managedPids = new Set();
+  const emptyPortMap = new Map();
+
+  for (const service of config.services) {
+    const { serviceState } = syncManagedServiceState(service, rawProcesses, emptyPortMap);
+    const childPid = serviceState.child?.pid ?? serviceState.adoptedPid ?? null;
+    if (childPid) {
+      managedPids.add(childPid);
+    }
+  }
+
+  if (managedPids.has(pid)) {
+    throw new Error(
+      "This pid belongs to a managed service. Use the managed start, stop, or restart controls instead.",
+    );
+  }
+
+  const observedProcess = rawProcesses.find(
+    (processRow) => processRow.pid === pid && !isHelperProcessRow(processRow),
+  );
+  if (!observedProcess) {
+    throw new Error("That observed process is no longer running.");
+  }
+
+  process.kill(pid, "SIGTERM");
+  await waitForPidExit(pid, 1800);
+
+  try {
+    process.kill(pid, 0);
+    process.kill(pid, "SIGKILL");
+    await waitForPidExit(pid, 1200);
+  } catch (_error) {
+    // The observed process exited during the graceful drain window.
+  }
+
+  return {
+    snapshot: await hydrateRuntimeSnapshot(),
+    message: `Terminated observed process ${path.basename(observedProcess.command)} (pid ${pid}).`,
+  };
+}
+
 async function initializeManagedServices() {
   if (autoStartInitialized) {
     return;
@@ -1757,6 +1812,10 @@ async function performProcessAction(action, processId) {
       snapshot: await hydrateRuntimeSnapshot(),
       message: "Live host scan completed.",
     };
+  }
+
+  if (action === "kill") {
+    return killObservedProcess(processId);
   }
 
   const { services } = await loadManagedConfig();

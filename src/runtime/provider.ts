@@ -23,7 +23,7 @@ export type RuntimeSourceDescriptor = {
 export type MewlHostBridge = {
   hydrateRuntimeSnapshot: () => Promise<RuntimeSnapshot>;
   performProcessAction?: (
-    action: "start" | "stop" | "restart" | "scan",
+    action: "start" | "stop" | "restart" | "scan" | "kill",
     processId: string,
   ) => Promise<RuntimeActionResult>;
   updateManagedService?: (

@@ -30,6 +30,7 @@
 - [x] Tune the Ports registry column sizing so longer target bindings stay readable
 - [x] Align the shared search field accent with the Pink Pixel rose brand color
 - [x] Move long process command text into the expanded card state to keep the grid compact
+- [x] Keep expanded Processes cards readable by wrapping long commands and working-directory paths inside the card bounds
 
 ## Phase 3: Native Runtime Bridge
 
@@ -81,10 +82,10 @@ This is the main UX split the product now points toward:
 #### 4.1 Observed workspace
 
 - [x] Simplify the live `Processes` workspace so it focuses on what is running right now, with expandable inspection and no lifecycle or manage/observe buttons on the cards
-- [ ] Keep `Observed` actions intentionally lightweight: inspect, focus, expand details, and kill the running process when the user explicitly chooses to do so
+- [x] Keep `Observed` actions intentionally lightweight: inspect, focus, expand details, and kill the running process when the user explicitly chooses to do so
 - [x] Keep the observed page read-only with respect to long-term service definitions so helper children and wrapper processes never become accidental managed services
 - [ ] Preserve the useful runtime facts on observed rows, such as detected pid, live ports, current status, and last heartbeat, without implying that Mewl owns the launch definition
-- [ ] Make the observed kill action clearly communicate that it is terminating the live process, not editing the managed service catalog
+- [x] Make the observed kill action clearly communicate that it is terminating the live process, not editing the managed service catalog
 
 #### 4.2 Managed workspace
 
@@ -102,8 +103,8 @@ This is the main UX split the product now points toward:
 
 #### 4.3 Manual create and migration flow
 
-- [ ] Add a guided flow to create a managed service from an observed process by pre-filling a new managed card instead of silently promoting the live row as-is
-- [ ] Let the guided flow capture the launch command, cwd, ports, and runtime hints while still requiring the user to confirm the final managed definition
+- [x] Add a guided flow to create a managed service from an observed process by pre-filling a new managed card instead of silently promoting the live row as-is
+- [x] Let the guided flow capture the launch command, cwd, ports, and runtime hints while still requiring the user to confirm the final managed definition
 - [ ] Add import and cleanup affordances for existing `mewl.services.json` entries so old inferred configs can be reviewed and corrected in the new managed editor
 - [ ] Normalize older inferred services into the new explicit schema so the app can clearly separate remembered service definitions from current host processes
 
@@ -134,7 +135,8 @@ This is the main UX split the product now points toward:
 
 - The first `Managed` workspace slice is now live: user-authored service cards can be created and edited directly in the app with start, stop, and restart command fields plus notes, colors, and icon choices.
 - The live `Processes` page is now visually lighter and inspection-first, with lifecycle and manage/observe controls removed from those cards and their inspector.
-- The next step inside this phase is the guided create-from-observed flow plus a clearer dedicated `Observed` label and kill action, so the mental model finishes landing.
+- The guided create-from-observed review flow and the clearer observed-only kill action are now live.
+- The next step inside this phase is import and cleanup affordances for older managed config entries so the explicit managed schema can be reviewed and normalized in-app.
 
 ## Phase 5: Quality and Delivery
 

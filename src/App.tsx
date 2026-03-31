@@ -66,7 +66,7 @@ import {
 
 type StatusFilter = "all" | "active" | "watching" | "issues";
 type RuntimeStatus = "loading" | "ready" | "error";
-type ProcessAction = "start" | "stop" | "restart" | "scan";
+type ProcessAction = "start" | "stop" | "restart" | "scan" | "kill";
 
 type PersistedWorkspaceState = {
   version: 1;
@@ -140,7 +140,7 @@ const processTextClassMap: Record<ProcessStatus, string> = {
 };
 
 const lifecycleActionMeta: Record<
-  Exclude<ProcessAction, "scan">,
+  Exclude<ProcessAction, "scan" | "kill">,
   { label: string; hex: string; icon: typeof Play }
 > = {
   start: { label: "Start", hex: accent.green, icon: Play },
@@ -249,6 +249,28 @@ const createDraftFromManagedProcess = (process: ManagedProcess): ManagedServiceD
   icon: process.icon ?? "server",
 });
 
+const createDraftFromObservedProcess = (process: ManagedProcess): ManagedServiceDraft => ({
+  name: process.name,
+  description: `Managed from the observed runtime on ${process.cwd}.`,
+  startCommand: process.command,
+  stopCommand: "",
+  restartCommand: "",
+  cwd: process.cwd === "unknown" ? "." : process.cwd,
+  autoStart: false,
+  watchPorts: process.ports.length > 0,
+  titleColor: "default",
+  icon:
+    process.runtime === "docker"
+      ? "workflow"
+      : process.runtime === "browser"
+        ? "globe"
+        : process.runtime === "python"
+          ? "bot"
+          : process.runtime === "electron"
+            ? "sparkles"
+            : "server",
+});
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -332,6 +354,7 @@ function App() {
   const [expandedResourceDrawIds, setExpandedResourceDrawIds] = useState<string[]>([]);
   const [managedEditorMode, setManagedEditorMode] = useState<"create" | "edit">("edit");
   const [managedDraft, setManagedDraft] = useState<ManagedServiceDraft>(createEmptyManagedDraft);
+  const [managedPrefillSourceId, setManagedPrefillSourceId] = useState("");
   const [processes, setProcesses] = useState<ManagedProcess[]>([]);
   const [ports, setPorts] = useState<PortBinding[]>([]);
   const [alerts, setAlerts] = useState<AlertRecord[]>([]);
@@ -539,6 +562,10 @@ function App() {
     managedServices[0] ??
     processes.find((process) => process.managed) ??
     null;
+  const managedPrefillSource =
+    managedPrefillSourceId.length > 0
+      ? processes.find((process) => process.id === managedPrefillSourceId && !process.managed) ?? null
+      : null;
   const canControlProcess = (process: ManagedProcess | null) =>
     runtimeStatus === "ready" && Boolean(process?.managed);
 
@@ -589,6 +616,7 @@ function App() {
     setAlertsOpen(false);
     setManagedEditorMode("edit");
     setManagedDraft(createEmptyManagedDraft());
+    setManagedPrefillSourceId("");
 
     void hydrateRuntimeSnapshot()
       .then((snapshot) => {
@@ -621,10 +649,12 @@ function App() {
 
     if (selectedManagedService) {
       setManagedDraft(createDraftFromManagedProcess(selectedManagedService));
+      setManagedPrefillSourceId("");
       return;
     }
 
     setManagedDraft(createEmptyManagedDraft());
+    setManagedPrefillSourceId("");
   }, [managedEditorMode, selectedManagedService]);
 
   const createProcessLogEntry = (level: ProcessLogLevel, text: string): ProcessLogEntry => ({
@@ -718,6 +748,44 @@ function App() {
         return;
       }
 
+      if (action === "kill") {
+        if (!targetProcess) {
+          setCommandState("Choose an observed process before requesting a live kill action.");
+          return;
+        }
+
+        if (targetProcess.managed) {
+          setCommandState(
+            "Kill is reserved for observed live processes. Use the managed service controls for saved services.",
+          );
+          return;
+        }
+
+        if (targetProcess.pid === null) {
+          setCommandState("That observed process no longer has a live pid to terminate.");
+          return;
+        }
+
+        setCommandState(
+          `Terminating observed process ${targetProcess.name} (pid ${targetProcess.pid}) from the Electron bridge.`,
+        );
+
+        startActionTransition(async () => {
+          try {
+            const result: RuntimeActionResult = await hostAction(action, targetProcess.id);
+            applyRuntimeActionResult(result);
+          } catch (error) {
+            setCommandState(
+              error instanceof Error
+                ? error.message
+                : "The Electron bridge could not terminate that observed process.",
+            );
+          }
+        });
+
+        return;
+      }
+
       if (action !== "scan" && !targetProcess?.managed) {
         setCommandState(
           "Only services registered in mewl.services.json can be started, stopped, or restarted.",
@@ -804,6 +872,11 @@ function App() {
             : "Port scan finished cleanly.",
         );
       });
+      return;
+    }
+
+    if (action === "kill") {
+      setCommandState("Observed process termination is only available from the Electron desktop bridge.");
       return;
     }
 
@@ -1027,6 +1100,26 @@ function App() {
     }
   };
 
+  const beginManagedDraftFromObservedProcess = (process: ManagedProcess) => {
+    if (process.managed) {
+      setCommandState("That process is already managed. Open it from the Managed workspace to edit the saved definition.");
+      changeView("managed");
+      setManagedEditorMode("edit");
+      setSelectedManagedServiceId(process.id);
+      return;
+    }
+
+    setManagedEditorMode("create");
+    setSelectedManagedServiceId("");
+    setManagedPrefillSourceId(process.id);
+    setManagedDraft(createDraftFromObservedProcess(process));
+    setSelectedProcessId(process.id);
+    changeView("managed");
+    setCommandState(
+      `Prefilled a managed draft from observed process ${process.name}. Review the commands before saving it to Mewl.`,
+    );
+  };
+
   const saveManagedDraft = () => {
     if (runtimeStatus !== "ready") {
       return;
@@ -1059,6 +1152,7 @@ function App() {
           applyRuntimeSnapshot(result.snapshot);
           setCommandState(result.message);
           setAlertsOpen(false);
+          setManagedPrefillSourceId("");
           focusManagedServiceFromSnapshot(
             result.snapshot,
             managedEditorMode === "create"
@@ -1142,6 +1236,33 @@ function App() {
       <Icon size={16} />
     </button>
   );
+
+  const renderObservedActions = (process: ManagedProcess, compact = false) => {
+    if (process.managed) {
+      return null;
+    }
+
+    return (
+      <div className={`flex flex-wrap items-center gap-3 ${compact ? "" : "mt-5"}`}>
+        <ShinyButton
+          label="Create Managed Draft"
+          hex={accent.rose}
+          icon={Sparkles}
+          subtle
+          onClick={() => beginManagedDraftFromObservedProcess(process)}
+          disabled={runtimeStatus !== "ready"}
+        />
+        <ShinyButton
+          label="Kill Observed PID"
+          hex={accent.rose}
+          icon={Trash2}
+          subtle
+          onClick={() => handleProcessAction("kill", process)}
+          disabled={isPending || runtimeStatus !== "ready" || process.pid === null}
+        />
+      </div>
+    );
+  };
 
   const toggleRule = (ruleId: string, nextValue: boolean) => {
     const rule = automationRules.find((item) => item.id === ruleId);
@@ -1337,6 +1458,20 @@ function App() {
             </span>
           )}
         </div>
+
+        {!selectedProcess.managed ? (
+          <div className="mt-5 rounded-[24px] border border-rose-400/16 bg-rose-500/8 p-4">
+            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-rose-100/72">
+              Observed Only
+            </p>
+            <p className="mt-2 text-sm text-white/62">
+              This row reflects a live host process. Creating a managed draft will prefill the
+              editor from what Mewl can observe right now, while kill will terminate the current
+              pid without changing the managed catalog.
+            </p>
+            {renderObservedActions(selectedProcess)}
+          </div>
+        ) : null}
 
         <div className="mt-5 grid gap-3 lg:grid-cols-3">
           <HologramProgress label="CPU Pressure" value={selectedProcess.cpu} hex={accent.amber} />
@@ -1651,12 +1786,14 @@ function App() {
               <button
                 type="button"
                 onClick={() => setSelectedProcessId(process.id)}
-                className="w-full text-left"
+                className="w-full min-w-0 text-left"
               >
                 <div className="flex items-start justify-between gap-4">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs uppercase tracking-[0.22em] text-white/34">{process.group}</p>
-                    <h3 className="mt-2 text-xl font-semibold text-white">{process.name}</h3>
+                    <h3 className="mt-2 break-words text-xl font-semibold text-white [overflow-wrap:anywhere]">
+                      {process.name}
+                    </h3>
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <StatusPill tone={processToneMap[process.status]} label={process.status} />
@@ -1692,12 +1829,18 @@ function App() {
               </button>
 
               {isExpanded ? (
-                <div className="mt-5 space-y-4 border-t border-white/8 pt-5">
-                  <p className="text-sm text-white/56">{process.description}</p>
-                  <div className="rounded-[20px] border border-white/8 bg-black/18 px-4 py-4">
+                <div className="mt-5 min-w-0 space-y-4 border-t border-white/8 pt-5">
+                  <p className="break-words text-sm text-white/56 [overflow-wrap:anywhere]">
+                    {process.description}
+                  </p>
+                  <div className="min-w-0 rounded-[20px] border border-white/8 bg-black/18 px-4 py-4">
                     <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">Command</p>
-                    <p className="mt-3 break-all font-mono text-sm text-white/80">{process.command}</p>
-                    <p className="mt-3 break-all font-mono text-xs text-white/42">{process.cwd}</p>
+                    <p className="mt-3 break-words font-mono text-sm leading-7 text-white/80 [overflow-wrap:anywhere]">
+                      {process.command}
+                    </p>
+                    <p className="mt-3 break-words font-mono text-xs leading-6 text-white/42 [overflow-wrap:anywhere]">
+                      {process.cwd}
+                    </p>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-3">
@@ -1717,6 +1860,18 @@ function App() {
                       hex={accent.cyan}
                     />
                   </div>
+                  {!process.managed ? (
+                    <div className="rounded-[22px] border border-rose-400/14 bg-rose-500/8 p-4">
+                      <p className="text-[0.72rem] uppercase tracking-[0.22em] text-rose-100/72">
+                        Observed Runtime Actions
+                      </p>
+                      <p className="mt-2 text-sm text-white/60">
+                        Promote this live row into a reviewed managed draft, or terminate only the
+                        current observed pid.
+                      </p>
+                      {renderObservedActions(process)}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </article>
@@ -1765,6 +1920,7 @@ function App() {
             onClick={() => {
               setManagedEditorMode("create");
               setSelectedManagedServiceId("");
+              setManagedPrefillSourceId("");
               setManagedDraft(createEmptyManagedDraft());
             }}
           />
@@ -1878,11 +2034,17 @@ function App() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-white/42">
-              {managedEditorMode === "create" ? "Create Managed Service" : "Edit Managed Service"}
+              {managedEditorMode === "create"
+                ? managedPrefillSource
+                  ? "Create Managed Service From Observed Runtime"
+                  : "Create Managed Service"
+                : "Edit Managed Service"}
             </p>
             <h3 className="mt-2 text-2xl font-semibold text-white">
               {managedEditorMode === "create"
-                ? "Author a launch definition"
+                ? managedPrefillSource
+                  ? "Review the observed draft"
+                  : "Author a launch definition"
                 : selectedManagedService?.name ?? "Managed editor"}
             </h3>
             <p className="mt-3 text-sm text-white/56">
@@ -1903,6 +2065,37 @@ function App() {
         </div>
 
         <div className="mt-6 space-y-4">
+          {managedEditorMode === "create" && managedPrefillSource ? (
+            <div className="rounded-[24px] border border-rose-400/16 bg-rose-500/8 p-4">
+              <p className="text-[0.72rem] uppercase tracking-[0.22em] text-rose-100/72">
+                Prefilled From Observed Runtime
+              </p>
+              <p className="mt-2 text-sm text-white/62">
+                This draft was captured from the live process {managedPrefillSource.name} (pid{" "}
+                {managedPrefillSource.pid ?? "none"}). Review the command, working directory, and
+                optional stop or restart hooks before saving it as a managed definition.
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-3">
+                  <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">
+                    Observed Command
+                  </p>
+                  <p className="mt-2 break-all font-mono text-sm text-white/80">
+                    {managedPrefillSource.command}
+                  </p>
+                </div>
+                <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-3">
+                  <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">
+                    Observed Working Dir
+                  </p>
+                  <p className="mt-2 break-all font-mono text-sm text-white/80">
+                    {managedPrefillSource.cwd}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <label className="block">
             <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">Name</p>
             <input

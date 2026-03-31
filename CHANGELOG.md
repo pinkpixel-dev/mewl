@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 13:48 EDT
+
+- tightened the Processes page card layout so long process names, descriptions, commands, and working-directory paths now wrap inside expanded cards instead of spilling past the edge
+- refreshed the README, overview, and roadmap to document the Processes card readability pass
+- revalidated the app with a successful `npm run build`
+
+## 2026-03-31 13:35 EDT
+
+- added a guided create-from-observed flow that opens the Managed editor with a prefilled draft banner, carrying over the observed command, working directory, and watch-port hint before anything is saved
+- added a dedicated observed-only kill action in the Processes page and inspector, with copy that makes it explicit that Mewl is terminating the live pid rather than editing the managed service catalog
+- extended the Electron runtime bridge with a real observed-process termination path that rejects managed-service pids and refreshes the live runtime snapshot afterward
+- refreshed the README, overview, and roadmap to document the new observed-to-managed review flow and clearer observed kill behavior
+- revalidated the app with a successful `npm run build`
+
 ## 2026-03-31 11:47 EDT
 
 - added a dedicated `Managed` workspace for user-authored service definitions, including editable start, stop, and restart commands, working directory, notes, autostart and watch-port toggles, title colors, and icon choices

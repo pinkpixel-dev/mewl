@@ -4,7 +4,7 @@
 
 Mewl is a local process and port management app for Pink Pixel. This pass pushes the project from a visual scaffold into a more functional product shell by restoring workspace state, surfacing structured process logs, and handling runtime loading and failure states more deliberately.
 
-The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, and wires real lifecycle control for Mewl-owned services.
+The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, wires real lifecycle control for Mewl-owned services, and now finishes the next Observed-versus-Managed UX slice with a guided create-from-observed flow plus a dedicated observed-only kill action.
 
 ## Technical Summary
 
@@ -30,7 +30,10 @@ The current implementation includes:
 - a rose-accented shared search field that matches the Pink Pixel brand color
 - a clean dashboard made of summary cards plus short process and port preview lists
 - a dedicated Processes page with expandable cards and a full inspector surface for live process inspection
+- improved wrapping rules on expanded process cards so long commands and filesystem paths stay contained within the card layout
+- explicit observed-runtime action panels that can prefill a managed draft or terminate only the current observed pid
 - a dedicated Managed page for explicit service definitions, lifecycle controls, and visual metadata
+- a prefilled managed-draft review state that carries observed command and cwd context into the editor before anything is saved
 - explicit `managed` and `observed` ownership tags on process surfaces without extra warning copy cluttering the cards
 - a collapsed process-card layout that keeps the grid tidy by moving long command text into the expanded panel
 - the first shipped split between lighter live-process inspection and a dedicated `Managed` service editor for user-authored launch definitions
@@ -106,6 +109,7 @@ The current implementation:
 - validates managed commands before spawn by tokenizing plain command strings, requiring a real executable token, and checking available reserved ports
 - still normalizes older config records on load so earlier command-and-args entries migrate into the newer explicit command schema
 - keeps discovered host processes read-only so Mewl does not send lifecycle signals to processes it does not own
+- now exposes a separate observed kill path that can terminate a live pid only when it is not already claimed by a managed service
 
 ### `electron/main.cjs`
 
@@ -158,6 +162,8 @@ This structure keeps the app close to the original mockup mood while making the 
 - process cards can expand in place for more detail before the full inspector is needed
 - managed-service editor changes and automation toggles round-trip through the Electron bridge
 - managed lifecycle actions and explicit command hooks append to stdout/stderr log tails from the live runtime
+- observed-process draft creation jumps directly into the Managed workspace with a review banner and prefilled launch details
+- observed-process termination is framed as a live pid action rather than a managed-service edit
 - button glow behavior follows Sparklebots interaction patterns
 - progress indicators and animated signal bars add motion without crowding the layout
 - the monitor page now keeps noisy service command details collapsed until explicitly expanded
@@ -170,7 +176,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - config persistence now assumes a per-user desktop install path rather than a repo-local JSON file
 - shell operators such as pipes, redirects, and compound command chains are still intentionally unsupported in the managed command parser
 - Docker-style helper commands can now be saved explicitly, but richer container-aware state and port introspection still need a future pass
-- the roadmap still favors a deeper split between `Observed` and `Managed`, with observed kill flows and guided create-from-live still pending
+- import and cleanup affordances for legacy `mewl.services.json` entries are still pending
 - no auth, multi-user roles, or workspace sync
 - no testing suite yet
 - no packaging for desktop delivery yet
@@ -180,7 +186,7 @@ This structure keeps the app close to the original mockup mood while making the 
 
 - keep expanding the Electron-backed adapter exposed through the runtime provider
 - expand lifecycle control beyond the starter managed-service config and add richer service definitions, environment handling, and exit diagnostics
-- continue splitting observed runtime inspection from managed-service authoring, including clearer live-only affordances and guided create-from-observed flows
+- continue splitting observed runtime inspection from managed-service authoring, including import cleanup for older inferred configs and richer review ergonomics for prefilled drafts
 - keep evolving the managed editor with richer validation, script/Docker ergonomics, and more complete runtime reconciliation
 - add live port discovery and collision detection from the host machine
 - persist workspace profiles, startup groups, and automation presets beyond the single local session model

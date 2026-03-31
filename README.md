@@ -7,6 +7,9 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Search a managed local runtime made up of services, workers, tooling, and data processes
 - Scan the live workspace from a compact top command strip
 - Browse a cleaner live Processes page that stays focused on what is running right now, with expandable cards and a read-only inspector
+- Keep long process names, descriptions, commands, and working-directory paths wrapped inside expanded Processes cards instead of spilling past the card edge
+- Convert an observed live process into a reviewed managed-service draft with prefilled command, cwd, port-watch, and runtime hints before saving anything to the catalog
+- Use a clearly marked observed-only kill action that terminates the current live pid without mutating the managed service list
 - Use a dedicated Managed workspace to create, edit, color-code, and control user-authored service definitions
 - Start, stop, and restart managed services from compact icon actions on managed cards instead of mixing control buttons into the live process list
 - Collapse helper subprocess noise on the Processes page so Chromium and Electron-based apps surface as one app-level row instead of a pile of zygotes and utility workers
@@ -49,6 +52,8 @@ This is the first real product pass, not the final native implementation yet.
 - Managed process launching, live port discovery, and host telemetry now run through the Electron preload bridge, with the Processes page staying focused on live inspection and the Managed page owning saved service control.
 - Managed-service configuration now lives in a per-user app config file instead of the repo, so packaged Electron builds can keep using the same settings location.
 - Managed services are now explicit saved definitions with a start command plus optional stop and restart commands instead of inferred promotion from the Processes page.
+- Observed processes can now seed the Managed editor through an explicit review step instead of being silently promoted straight into saved config.
+- The live Processes page now exposes only two observed-process actions: create a managed draft from what Mewl can currently see, or kill the live pid without changing the managed catalog.
 
 ## Run Locally
 
@@ -149,6 +154,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - the shared search field now uses the Pink Pixel rose accent for its icon and focus glow
 - clean overview dashboard with summary cards and short preview lists instead of oversized explainer surfaces
 - dedicated Processes page with expandable cards and a full-width inspector for live process inspection
+- observed-only action panels on live process cards and inspector, with explicit language around draft creation versus pid termination
 - managed cards now carry their own icon-only lifecycle controls so command execution stays attached to saved service definitions
 - process surfaces now label each entry as `managed` or `observed` without extra explanatory filler on observed cards
 - observed process cards now prefer launchable parent app rows instead of noisy helper children, which keeps the live process list focused on the app users actually mean
@@ -188,3 +194,5 @@ The current product direction is intentionally utility-first rather than dashboa
 - The live host scan now hides helper subprocesses such as Chromium zygotes and utility workers from the default Processes grid so one app reads like one app.
 - The notifications tray is layered above the dashboard surfaces so alerts stay readable when opened from the top command bar.
 - Managed services can now be authored directly in the app with command fields, notes, color accents, and icon selection, while live process cards stay focused on inspection instead of control.
+- Creating from an observed process now opens the Managed editor with a prefilled draft banner so the saved definition is reviewed before it becomes part of Mewl's catalog.
+- Killing an observed process is now a dedicated live-runtime action that targets only the current pid and keeps managed lifecycle semantics separate.

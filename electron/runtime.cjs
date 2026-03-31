@@ -1,0 +1,582 @@
+const os = require("node:os");
+const fs = require("node:fs/promises");
+const path = require("node:path");
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
+
+const execFileAsync = promisify(execFile);
+const processLimit = 18;
+const sampleDelayMs = 180;
+const oneMegabyte = 1024 * 1024;
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function formatStamp(date = new Date()) {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function createLogEntry(level, text) {
+  return {
+    id: `live-log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    stamp: formatStamp(),
+    level,
+    text,
+  };
+}
+
+async function runCommand(command, args) {
+  const result = await execFileAsync(command, args, {
+    maxBuffer: 12 * 1024 * 1024,
+  });
+
+  return result.stdout.trim();
+}
+
+async function runCommandWithFallback(commands) {
+  for (const candidate of commands) {
+    try {
+      return await runCommand(candidate.command, candidate.args);
+    } catch (error) {
+      if (candidate === commands[commands.length - 1]) {
+        throw error;
+      }
+    }
+  }
+
+  return "";
+}
+
+function readCpuTimes() {
+  return os.cpus().reduce(
+    (totals, cpu) => {
+      totals.idle += cpu.times.idle;
+      totals.total += Object.values(cpu.times).reduce((sum, value) => sum + value, 0);
+      return totals;
+    },
+    { idle: 0, total: 0 },
+  );
+}
+
+async function sampleCpuUsage() {
+  const start = readCpuTimes();
+  await delay(sampleDelayMs);
+  const end = readCpuTimes();
+  const idleDelta = end.idle - start.idle;
+  const totalDelta = end.total - start.total;
+
+  if (totalDelta <= 0) {
+    return 0;
+  }
+
+  return clamp(Math.round((1 - idleDelta / totalDelta) * 100), 0, 100);
+}
+
+async function readNetworkBytes() {
+  const interfacesPath = "/sys/class/net";
+  const interfaceNames = await fs.readdir(interfacesPath);
+  const activeNames = interfaceNames.filter((name) => name !== "lo");
+
+  const counters = await Promise.all(
+    activeNames.map(async (name) => {
+      try {
+        const [rxBytes, txBytes] = await Promise.all([
+          fs.readFile(path.join(interfacesPath, name, "statistics", "rx_bytes"), "utf8"),
+          fs.readFile(path.join(interfacesPath, name, "statistics", "tx_bytes"), "utf8"),
+        ]);
+
+        return Number(rxBytes.trim()) + Number(txBytes.trim());
+      } catch (_error) {
+        return 0;
+      }
+    }),
+  );
+
+  return counters.reduce((sum, value) => sum + value, 0);
+}
+
+function formatThroughput(bytesPerSecond) {
+  if (bytesPerSecond >= oneMegabyte) {
+    return `${(bytesPerSecond / oneMegabyte).toFixed(1)} MB/s`;
+  }
+
+  return `${Math.round(bytesPerSecond / 1024)} KB/s`;
+}
+
+async function sampleNetworkUsage() {
+  const start = await readNetworkBytes();
+  await delay(sampleDelayMs);
+  const end = await readNetworkBytes();
+  const bytesPerSecond = Math.max(0, Math.round(((end - start) * 1000) / sampleDelayMs));
+  const percent = clamp(Math.round((bytesPerSecond / (5 * oneMegabyte)) * 100), 0, 100);
+
+  return {
+    percent,
+    bytesPerSecond,
+  };
+}
+
+async function readDiskUsage() {
+  const output = await runCommand("df", ["-kP", "/"]);
+  const lines = output.split("\n").filter(Boolean);
+  const fields = lines[lines.length - 1]?.trim().split(/\s+/) ?? [];
+  const capacityField = fields[4] ?? "0%";
+
+  return clamp(Number.parseInt(capacityField.replace("%", ""), 10) || 0, 0, 100);
+}
+
+function normalizeRuntime(command, args) {
+  const joined = `${command} ${args}`.toLowerCase();
+
+  if (joined.includes("electron")) {
+    return "electron";
+  }
+
+  if (joined.includes("node")) {
+    return "node";
+  }
+
+  if (joined.includes("python")) {
+    return "python";
+  }
+
+  if (joined.includes("docker")) {
+    return "docker";
+  }
+
+  if (joined.includes("chrome") || joined.includes("chromium") || joined.includes("firefox")) {
+    return "browser";
+  }
+
+  return command.toLowerCase();
+}
+
+function normalizeGroup(runtime, cwd) {
+  if (cwd.includes("/PROJECTS/") || cwd.includes("/code/") || cwd.includes("/src/")) {
+    return "workspace";
+  }
+
+  if (runtime === "browser") {
+    return "browser";
+  }
+
+  if (runtime === "electron" || runtime === "node" || runtime === "python") {
+    return "development";
+  }
+
+  return "system";
+}
+
+function normalizeStatus(state) {
+  if (state.includes("T") || state.includes("Z") || state.includes("X")) {
+    return "degraded";
+  }
+
+  return "running";
+}
+
+function formatElapsed(raw) {
+  if (!raw) {
+    return "unknown";
+  }
+
+  if (raw.includes("-")) {
+    const [days, rest] = raw.split("-");
+    return `${days}d ${rest}`;
+  }
+
+  return raw;
+}
+
+function inferExposure(target) {
+  if (
+    target.startsWith("127.0.0.1:") ||
+    target.startsWith("[::1]:") ||
+    target.startsWith("localhost:")
+  ) {
+    return "local";
+  }
+
+  if (
+    target.startsWith("*:") ||
+    target.startsWith("0.0.0.0:") ||
+    target.startsWith("[::]:")
+  ) {
+    return "public";
+  }
+
+  return "internal";
+}
+
+async function readWorkingDirectory(pid) {
+  try {
+    return await fs.readlink(`/proc/${pid}/cwd`);
+  } catch (_error) {
+    return "";
+  }
+}
+
+async function readUserProcesses() {
+  const username = os.userInfo().username;
+  const output = await runCommand("ps", [
+    "-u",
+    username,
+    "-o",
+    "pid=",
+    "-o",
+    "ppid=",
+    "-o",
+    "comm=",
+    "-o",
+    "%cpu=",
+    "-o",
+    "rss=",
+    "-o",
+    "etime=",
+    "-o",
+    "state=",
+    "-o",
+    "args=",
+    "--sort=-pcpu,-rss",
+  ]);
+
+  const rows = output.split("\n").filter(Boolean);
+  const parsed = rows
+    .map((row) => {
+      const match = row.match(
+        /^\s*(\d+)\s+(\d+)\s+(\S+)\s+([\d.]+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(.*)$/,
+      );
+
+      if (!match) {
+        return null;
+      }
+
+      const [, pid, ppid, command, cpu, rss, elapsed, state, args] = match;
+
+      return {
+        pid: Number(pid),
+        ppid: Number(ppid),
+        command,
+        args,
+        cpu: Math.round(Number.parseFloat(cpu) || 0),
+        memoryMb: Math.max(1, Math.round((Number.parseInt(rss, 10) || 0) / 1024)),
+        elapsed,
+        state,
+      };
+    })
+    .filter(Boolean);
+
+  return Promise.all(
+    parsed.map(async (processRow) => ({
+      ...processRow,
+      cwd: await readWorkingDirectory(processRow.pid),
+    })),
+  );
+}
+
+function parsePortFromTarget(target) {
+  const match = target.match(/:(\d+)(?:\s+\(LISTEN\))?$/);
+  return match ? Number(match[1]) : null;
+}
+
+async function readPortBindings() {
+  const username = os.userInfo().username;
+  const output = await runCommandWithFallback([
+    {
+      command: "lsof",
+      args: ["-nP", "-u", username, "-iTCP", "-iUDP"],
+    },
+    {
+      command: "ss",
+      args: ["-lntup"],
+    },
+  ]);
+
+  if (!output) {
+    return [];
+  }
+
+  if (output.startsWith("COMMAND")) {
+    return output
+      .split("\n")
+      .slice(1)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => line.split(/\s+/))
+      .map((parts) => {
+        const protocol = parts[7]?.toLowerCase() ?? "tcp";
+        const target = parts.slice(8).join(" ").replace(/\s+\(LISTEN\)$/, "");
+        const port = parsePortFromTarget(target);
+
+        if (!port) {
+          return null;
+        }
+
+        if (target.includes("->")) {
+          return null;
+        }
+
+        if (protocol === "tcp" && !parts.slice(8).join(" ").includes("(LISTEN)")) {
+          return null;
+        }
+
+        return {
+          pid: Number(parts[1]),
+          protocol,
+          port,
+          target,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  return output
+    .split("\n")
+    .slice(1)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split(/\s+/);
+      const protocol = parts[0]?.toLowerCase();
+      const localAddress = parts[4];
+      const processDetails = parts.slice(6).join(" ");
+      const pidMatch = processDetails.match(/pid=(\d+)/);
+      const port = parsePortFromTarget(localAddress);
+
+      if (!pidMatch || !port) {
+        return null;
+      }
+
+      return {
+        pid: Number(pidMatch[1]),
+        protocol: protocol.startsWith("udp") ? "udp" : "tcp",
+        port,
+        target: localAddress,
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildAlerts(processes, ports, metrics) {
+  const alerts = [];
+  const conflictPorts = ports.filter((port) => port.status === "conflict");
+  const publicPorts = ports.filter((port) => port.exposure === "public");
+  const hotProcess = processes[0];
+
+  if (conflictPorts.length > 0) {
+    alerts.push({
+      id: "live-alert-conflicts",
+      title: "Port conflict detected",
+      detail: `${conflictPorts.length} live binding${conflictPorts.length === 1 ? "" : "s"} share a reserved port.`,
+      severity: "critical",
+      stamp: "now",
+    });
+  }
+
+  if (publicPorts.length > 0) {
+    alerts.push({
+      id: "live-alert-public",
+      title: "Public listeners exposed",
+      detail: `${publicPorts.length} binding${publicPorts.length === 1 ? "" : "s"} are reachable beyond localhost.`,
+      severity: "warning",
+      stamp: "now",
+    });
+  }
+
+  if (hotProcess && hotProcess.cpu >= 70) {
+    alerts.push({
+      id: "live-alert-cpu",
+      title: "Hot process on the host",
+      detail: `${hotProcess.name} is currently leading CPU usage at ${hotProcess.cpu}%.`,
+      severity: "warning",
+      stamp: "now",
+    });
+  }
+
+  if (metrics.memory.value >= 80) {
+    alerts.push({
+      id: "live-alert-memory",
+      title: "Memory pressure is elevated",
+      detail: `Host memory pressure is currently ${metrics.memory.value}%.`,
+      severity: "warning",
+      stamp: "now",
+    });
+  }
+
+  if (alerts.length === 0) {
+    alerts.push({
+      id: "live-alert-quiet",
+      title: "Live host snapshot is healthy",
+      detail: "No immediate port conflicts or pressure spikes were detected in the latest scan.",
+      severity: "info",
+      stamp: "now",
+    });
+  }
+
+  return alerts.slice(0, 6);
+}
+
+async function hydrateRuntimeSnapshot() {
+  const [cpuPercent, networkUsage, diskPercent, rawProcesses, rawBindings] = await Promise.all([
+    sampleCpuUsage(),
+    sampleNetworkUsage(),
+    readDiskUsage(),
+    readUserProcesses(),
+    readPortBindings(),
+  ]);
+
+  const memoryPercent = clamp(
+    Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100),
+    0,
+    100,
+  );
+
+  const portMap = new Map();
+  for (const binding of rawBindings) {
+    const list = portMap.get(binding.pid) ?? [];
+    list.push(binding);
+    portMap.set(binding.pid, list);
+  }
+
+  const selectedPids = new Set([
+    ...rawProcesses.slice(0, processLimit).map((processRow) => processRow.pid),
+    ...rawBindings.map((binding) => binding.pid),
+  ]);
+
+  const selectedProcesses = rawProcesses
+    .filter((processRow) => selectedPids.has(processRow.pid))
+    .sort((left, right) => right.cpu + right.memoryMb / 25 - (left.cpu + left.memoryMb / 25));
+
+  const processLookup = new Map();
+
+  const processes = selectedProcesses.map((processRow) => {
+    const runtime = normalizeRuntime(processRow.command, processRow.args);
+    const group = normalizeGroup(runtime, processRow.cwd);
+    const processPorts = (portMap.get(processRow.pid) ?? []).map((binding) => binding.port);
+    const status = normalizeStatus(processRow.state);
+    const processRecord = {
+      id: `pid-${processRow.pid}`,
+      name: path.basename(processRow.command),
+      group,
+      description: processRow.cwd
+        ? `${runtime} process discovered from ${processRow.cwd}.`
+        : `${runtime} process discovered from the live host scan.`,
+      command: processRow.args,
+      cwd: processRow.cwd || "unknown",
+      runtime,
+      status,
+      pid: processRow.pid,
+      ports: processPorts,
+      cpu: clamp(processRow.cpu, 0, 100),
+      memory: processRow.memoryMb,
+      network: 0,
+      uptime: formatElapsed(processRow.elapsed),
+      restarts: 0,
+      lastExit: "Exit history is not available for discovered live processes.",
+      lastHeartbeat: "live",
+      autoStart: false,
+      watchPorts: processPorts.length > 0,
+      logs: {
+        stdout: [
+          createLogEntry(
+            "info",
+            `Discovered ${processRow.args} from the Electron host runtime scan.`,
+          ),
+        ],
+        stderr:
+          status === "degraded"
+            ? [createLogEntry("warning", "This process is reporting a non-running kernel state.")]
+            : [],
+      },
+    };
+
+    processLookup.set(processRow.pid, processRecord);
+    return processRecord;
+  });
+
+  const portGroups = new Map();
+  for (const binding of rawBindings) {
+    const key = `${binding.protocol}:${binding.port}`;
+    const list = portGroups.get(key) ?? [];
+    list.push(binding.pid);
+    portGroups.set(key, list);
+  }
+
+  const ports = rawBindings
+    .filter((binding) => processLookup.has(binding.pid))
+    .map((binding) => {
+      const owningProcess = processLookup.get(binding.pid);
+      const status =
+        (portGroups.get(`${binding.protocol}:${binding.port}`) ?? []).length > 1
+          ? "conflict"
+          : "bound";
+      const exposure = inferExposure(binding.target);
+
+      return {
+        id: `port-${binding.protocol}-${binding.port}-pid-${binding.pid}`,
+        port: binding.port,
+        protocol: binding.protocol,
+        serviceId: owningProcess.id,
+        service: owningProcess.name,
+        target: binding.target,
+        exposure,
+        status,
+        note:
+          status === "conflict"
+            ? "Multiple live processes are currently bound to this host port."
+            : exposure === "public"
+              ? "Listener is reachable beyond the loopback interface."
+              : "Listener was discovered from the live host scan.",
+      };
+    })
+    .sort((left, right) => left.port - right.port);
+
+  const metrics = {
+    cpu: {
+      id: "cpu",
+      label: "Host CPU",
+      value: cpuPercent,
+      detail: "Live sample from Electron host CPU polling.",
+    },
+    memory: {
+      id: "memory",
+      label: "Memory Pressure",
+      value: memoryPercent,
+      detail: `Using ${Math.floor((os.totalmem() - os.freemem()) / oneMegabyte)} MB of ${Math.floor(os.totalmem() / oneMegabyte)} MB.`,
+    },
+    disk: {
+      id: "disk",
+      label: "Disk Activity",
+      value: diskPercent,
+      detail: "Root filesystem usage from the current host disk sample.",
+    },
+    network: {
+      id: "network",
+      label: "Network Chatter",
+      value: networkUsage.percent,
+      detail: `Observed ${formatThroughput(networkUsage.bytesPerSecond)} across active interfaces.`,
+    },
+  };
+
+  return {
+    processes,
+    ports,
+    alerts: buildAlerts(processes, ports, metrics),
+    monitorMetrics: [metrics.cpu, metrics.memory, metrics.disk, metrics.network],
+    automationRules: [],
+  };
+}
+
+module.exports = {
+  hydrateRuntimeSnapshot,
+};

@@ -49,6 +49,7 @@ import {
   type ProcessLogLevel,
   type PortStatus,
   type ProcessStatus,
+  type RuntimeSnapshot,
   type WorkspaceView,
 } from "./data/runtime";
 import {
@@ -242,6 +243,20 @@ function App() {
   const [commandState, setCommandState] = useState(defaultCommandState);
   const [isPending, startActionTransition] = useTransition();
   const runtimeSource = getRuntimeSourceDescriptor();
+  const isLiveElectronRuntime = runtimeSource.id === "electron";
+
+  const applyRuntimeSnapshot = (snapshot: RuntimeSnapshot) => {
+    setProcesses(snapshot.processes);
+    setPorts(snapshot.ports);
+    setAlerts(snapshot.alerts);
+    setMonitorMetrics(snapshot.monitorMetrics);
+    setAutomationRules(snapshot.automationRules);
+    setSelectedProcessId((current) =>
+      snapshot.processes.some((process) => process.id === current)
+        ? current
+        : (snapshot.processes[0]?.id ?? ""),
+    );
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -541,6 +556,21 @@ function App() {
 
   const handleProcessAction = (action: "start" | "stop" | "restart" | "scan") => {
     if (runtimeStatus !== "ready") {
+      return;
+    }
+
+    if (isLiveElectronRuntime) {
+      if (action === "scan") {
+        setCommandState("Refreshing live host services, bindings, and telemetry from Electron.");
+
+        startActionTransition(async () => {
+          const snapshot = await hydrateRuntimeSnapshot();
+          applyRuntimeSnapshot(snapshot);
+          setCommandState("Live host scan completed.");
+          setAlertsOpen(false);
+        });
+      }
+
       return;
     }
 
@@ -1680,6 +1710,17 @@ function App() {
           <p className="text-sm font-medium text-white/84">Latest command state</p>
           <p className="mt-2 text-sm text-white/54">{commandState}</p>
         </div>
+        {isLiveElectronRuntime ? (
+          <div className="mt-4 rounded-[24px] border border-white/8 bg-black/18 px-4 py-4">
+            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+              Lifecycle wiring
+            </p>
+            <p className="mt-2 text-sm text-white/54">
+              Live host scanning is active through Electron. Start, stop, and restart will be
+              enabled once managed command execution is wired to the desktop bridge.
+            </p>
+          </div>
+        ) : null}
         <div className="mt-4 rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -1900,21 +1941,36 @@ function App() {
                   label="Start"
                   hex={accent.green}
                   icon={Play}
-                  disabled={!selectedProcess || isPending || runtimeStatus !== "ready"}
+                  disabled={
+                    !selectedProcess ||
+                    isPending ||
+                    runtimeStatus !== "ready" ||
+                    isLiveElectronRuntime
+                  }
                   onClick={() => handleProcessAction("start")}
                 />
                 <ShinyButton
                   label="Stop"
                   hex={accent.rose}
                   icon={Square}
-                  disabled={!selectedProcess || isPending || runtimeStatus !== "ready"}
+                  disabled={
+                    !selectedProcess ||
+                    isPending ||
+                    runtimeStatus !== "ready" ||
+                    isLiveElectronRuntime
+                  }
                   onClick={() => handleProcessAction("stop")}
                 />
                 <ShinyButton
                   label="Restart"
                   hex={accent.purple}
                   icon={RefreshCw}
-                  disabled={!selectedProcess || isPending || runtimeStatus !== "ready"}
+                  disabled={
+                    !selectedProcess ||
+                    isPending ||
+                    runtimeStatus !== "ready" ||
+                    isLiveElectronRuntime
+                  }
                   onClick={() => handleProcessAction("restart")}
                 />
                 <ShinyButton

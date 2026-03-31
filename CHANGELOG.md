@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 07:21 EDT
+
+- added an Electron desktop shell with `electron/main.cjs` and `electron/preload.cjs`
+- implemented a first live host runtime collector in `electron/runtime.cjs` that scans real user processes, listening ports, and host metrics
+- updated the React shell so Electron mode uses the live bridge for runtime hydration and refresh scans instead of the mock boot helpers
+- disabled unfinished lifecycle buttons in live Electron mode so the app no longer pretends start, stop, and restart are wired when they are not
+- added `dev:desktop` and related package scripts for running the Vite renderer and Electron shell together during development
+- refreshed the docs to mark the remaining browser mock path as temporary and the long-term goal as a no-fallback live desktop runtime
+- revalidated the web build with a successful `npm run build`
+
 ## 2026-03-31 06:54 EDT
 
 - chose Electron as Mewl's native host integration layer and documented the decision across the roadmap and technical docs

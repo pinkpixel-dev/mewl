@@ -3,11 +3,16 @@
   "private": true,
   "version": "0.1.0",
   "description": "Mewl local process manager for running services, ports, and system monitoring with Pink Pixel styling.",
+  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:web": "vite",
+    "dev:electron": "wait-on tcp:29463 && MEWL_RENDERER_URL=http://127.0.0.1:29463 electron electron/main.cjs",
+    "dev:desktop": "concurrently -k \"npm:dev:web\" \"npm:dev:electron\"",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "desktop": "electron electron/main.cjs"
   },
   "keywords": [
     "mewl",
@@ -31,8 +36,11 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.2.1",
+    "electron": "^41.1.0",
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
-    "vite": "^8.0.3"
+    "vite": "^8.0.3",
+    "wait-on": "^9.0.4"
   }
 }

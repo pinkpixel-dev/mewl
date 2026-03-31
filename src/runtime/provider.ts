@@ -65,9 +65,9 @@ export function getRuntimeSourceDescriptor(): RuntimeSourceDescriptor {
     return {
       id: "electron",
       label: "Electron bridge",
-      badgeLabel: "electron bridge",
+      badgeLabel: "electron live",
       detail:
-        "The renderer is connected to the future Electron preload API for runtime hydration.",
+        "The renderer is connected to the Electron preload bridge and is reading live host state.",
       hostLayer: chosenHostLayer.id,
       availability: "active",
       capabilities: [
@@ -84,7 +84,7 @@ export function getRuntimeSourceDescriptor(): RuntimeSourceDescriptor {
     label: "Mock runtime",
     badgeLabel: "mock fallback",
     detail:
-      "The renderer is running against the mock contract while the Electron host bridge is being implemented.",
+      "The renderer is running against the temporary mock contract outside the Electron desktop shell.",
     hostLayer: chosenHostLayer.id,
     availability: "fallback",
     capabilities: [],

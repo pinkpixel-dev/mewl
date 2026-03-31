@@ -40,6 +40,8 @@
 
 - Electron is the selected host layer for the native bridge.
 - The renderer now loads runtime state through `src/runtime/provider.ts`, which preserves the current mock source while defining the future Electron preload seam.
+- The desktop shell now includes `electron/main.cjs`, `electron/preload.cjs`, and `electron/runtime.cjs` for a first live host scan.
+- The temporary mock path still exists for the browser build, but the intended end state is no mock fallback once the Electron bridge owns the full runtime.
 
 ## Phase 4: Monitoring and Automation
 

@@ -11,6 +11,7 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Jump from dashboard previews into dedicated Processes and Ports pages with `See all` actions
 - Browse the Processes page as expandable three-column cards with the full inspector shown below
 - Inspect per-process stdout and stderr tails from the mock runtime contract
+- Load live processes, listening ports, and host telemetry through an Electron preload bridge when running in the desktop shell
 - Review a port registry with exposure, conflict, and watched-binding states
 - Track host CPU, memory, disk, and network pressure from the sidebar and monitor view
 - Recover gracefully with loading, empty, and error states while the workspace runtime hydrates
@@ -61,6 +62,12 @@ Preview the production build:
 npm run preview
 ```
 
+Run the Electron desktop shell against the live host bridge:
+
+```bash
+npm run dev:desktop
+```
+
 ## Project Structure
 
 ```text
@@ -80,6 +87,10 @@ npm run preview
 |   |-- main.tsx
 |   |-- styles.css
 |   `-- vite-env.d.ts
+|-- electron/
+|   |-- main.cjs
+|   |-- preload.cjs
+|   `-- runtime.cjs
 |-- CHANGELOG.md
 |-- LICENSE
 |-- OVERVIEW.md
@@ -102,6 +113,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - dedicated Ports and Monitor pages for deeper operational detail
 - structured process logs and session memory so the shell feels more like a real local cockpit
 - a runtime source abstraction that keeps the mock snapshot and a future Electron bridge behind the same UI-facing contract
+- a live Electron host bridge that can scan the current user session for processes, ports, and machine pressure
 - Pink Pixel branding applied without turning the app into a generic purple SaaS grid
 
 ## Brand
@@ -119,4 +131,6 @@ The current product direction is intentionally utility-first rather than dashboa
 - `public/icon.png` is used by the app shell and browser tab.
 - The current implementation is a polished local-ops foundation with mock runtime data, persisted workspace state, and no native system bridge yet.
 - Electron is now the documented native-host target, but the repo still ships as a web build until the preload and main-process bridge lands.
+- The desktop shell now has a first live Electron bridge for runtime hydration, but lifecycle control is still being wired one step at a time.
+- The remaining browser-side mock path is temporary; the long-term goal is a fully live desktop runtime with no mock fallback.
 - The notifications tray is layered above the dashboard surfaces so alerts stay readable when opened from the top command bar.

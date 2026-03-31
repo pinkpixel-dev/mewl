@@ -4,7 +4,7 @@
 
 Mewl is a local process and port management app for Pink Pixel. This pass pushes the project from a visual scaffold into a more functional product shell by restoring workspace state, surfacing structured process logs, and handling runtime loading and failure states more deliberately.
 
-The latest iteration also chooses Electron as the native host direction and introduces a runtime-provider seam so the renderer no longer depends directly on the mock boot helpers.
+The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam so the renderer no longer depends directly on the mock boot helpers, and adds a first live host snapshot path through Electron preload IPC.
 
 ## Technical Summary
 
@@ -72,9 +72,21 @@ Defines the runtime source boundary that the renderer now uses for hydration and
 The provider currently:
 
 - falls back to the mock runtime contract in the browser build
-- detects a future `window.mewlHost` preload bridge when Mewl is hosted inside Electron
+- detects `window.mewlHost` when Mewl is hosted inside Electron
 - documents Electron as the chosen host layer for process control, port discovery, host metrics, and secure command execution
 - keeps the UI-facing `RuntimeSnapshot` contract stable while the native bridge is implemented
+
+### `electron/runtime.cjs`
+
+Provides the first live native runtime collector for the Electron host shell.
+
+The current implementation:
+
+- scans the current user's processes with `ps`
+- scans bound TCP and UDP ports with `lsof`, with `ss` as a host-command fallback
+- samples CPU, memory, disk, and network pressure from the local machine
+- maps the live host snapshot into the existing renderer-facing `RuntimeSnapshot` shape
+- avoids fake lifecycle behavior in Electron mode by leaving start, stop, and restart disabled until managed execution is wired
 
 ### `src/styles.css`
 
@@ -119,8 +131,7 @@ This structure keeps the app close to the original mockup mood while making the 
 ## Current Limitations
 
 - no native process bridge yet, so OS process control is not live
-- Electron is chosen as the host layer, but the preload API and main-process handlers still need to be implemented
-- no real port inspection or system telemetry ingestion
+- Electron is chosen as the host layer, but managed lifecycle control still needs to be implemented on top of the live bridge
 - no auth, multi-user roles, or workspace sync
 - no testing suite yet
 - no packaging for desktop delivery yet
@@ -128,6 +139,7 @@ This structure keeps the app close to the original mockup mood while making the 
 ## Extension Points
 
 - replace the browser fallback path with the real Electron-backed adapter exposed through the runtime provider
+- replace the remaining temporary browser mock fallback once the desktop bridge owns the full product path
 - implement the Electron preload and main-process bridge behind the runtime provider
 - wire lifecycle actions to spawn, kill, restart, and inspect real processes
 - add live port discovery and collision detection from the host machine

@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 11:47 EDT
+
+- added a dedicated `Managed` workspace for user-authored service definitions, including editable start, stop, and restart commands, working directory, notes, autostart and watch-port toggles, title colors, and icon choices
+- removed the old `Manage` / `Observe` and lifecycle controls from the live Processes cards so that page now stays focused on expandable runtime inspection instead of service authoring
+- updated the Electron bridge and config layer so managed services are explicit saved definitions with command-string parsing, optional stop and restart hooks, and in-app create, update, and remove actions
+- refreshed the README, overview, and roadmap to document the new Managed workspace and the lighter live-process model
+- revalidated the app with a successful `npm run build`
+
+## 2026-03-31 11:05 EDT
+
+- expanded the roadmap into a detailed `Observed` versus `Managed` product slice so future work can be planned as a clean split between live inspection and explicit service definitions
+- documented the manual managed-service editor direction, including launch commands, renameable cards, metadata, and script/Docker-friendly start and stop flows
+- refreshed the README and overview to match the roadmap language so the product direction stays aligned across the docs
+
 ## 2026-03-31 10:40 EDT
 
 - fixed the Processes view so helper subprocesses like Chromium and Electron `--type=...` workers no longer flood the grid as separate app cards

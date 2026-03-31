@@ -29,11 +29,11 @@ The current implementation includes:
 - a compact action/search header with no large banner copy
 - a rose-accented shared search field that matches the Pink Pixel brand color
 - a clean dashboard made of summary cards plus short process and port preview lists
-- a dedicated Processes page with expandable cards and a full inspector surface
-- process-level lifecycle controls directly on process cards plus the inspector so service actions stay close to the process being operated
+- a dedicated Processes page with expandable cards and a full inspector surface for live process inspection
+- a dedicated Managed page for explicit service definitions, lifecycle controls, and visual metadata
 - explicit `managed` and `observed` ownership tags on process surfaces without extra warning copy cluttering the cards
-- a process-level `Manage` / `Observe` action that edits the saved service config from the UI
 - a collapsed process-card layout that keeps the grid tidy by moving long command text into the expanded panel
+- the first shipped split between lighter live-process inspection and a dedicated `Managed` service editor for user-authored launch definitions
 - view-specific pages for port registry, monitor, and automation workflows
 - a cleaner Automation page that surfaces latest activity and runtime source inline instead of keeping a bulky secondary state column
 - a ports registry table with a wider target column and wrapping behavior for longer bind addresses
@@ -71,7 +71,7 @@ Holds the shared TypeScript runtime contract used by both the renderer and the E
 - monitor metrics
 - optional GPU telemetry metadata, including availability and display labels for hosts without readable GPU counters
 - automation rules
-This file is the current contract surface for the live Electron adapter.
+  This file is the current contract surface for the live Electron adapter.
 
 ### `src/runtime/provider.ts`
 
@@ -98,13 +98,13 @@ The current implementation:
 - stores the managed-service config in a per-user app-data location (`~/.config/mewl/mewl.services.json` on Linux) so packaged builds do not depend on the repo checkout
 - starts, stops, and restarts managed services through child-process ownership in the Electron main process
 - reattaches matching managed services that are already running on the host so stop and restart still work after Mewl reconnects
-- can promote observed host processes into managed services and demote managed services back to observed by updating the saved config through the preload bridge
+- now treats managed services as explicit saved definitions with a start command plus optional stop and restart commands
 - now filters helper subprocesses such as Chromium and Electron `--type=...` workers out of the discovered-process grid so the renderer shows app-level rows instead of every child process
-- promotes helper-child clicks back to the launchable parent process before saving a managed service, which prevents duplicate or non-controllable entries from piling up in config
+- now stores optional managed-service title colors and icon choices alongside command metadata
 - persists managed `autoStart` and `watchPorts` changes back into `mewl.services.json` through the preload bridge
 - applies enabled startup profiles on Electron boot and lets the Automation view trigger grouped start/stop presets
-- validates managed commands before spawn by requiring a single executable token, a workspace-safe cwd, an explicit inherited environment, and available reserved ports
-- normalizes helper-generated managed entries on config load so stale duplicate records collapse back into a single service definition
+- validates managed commands before spawn by tokenizing plain command strings, requiring a real executable token, and checking available reserved ports
+- still normalizes older config records on load so earlier command-and-args entries migrate into the newer explicit command schema
 - keeps discovered host processes read-only so Mewl does not send lifecycle signals to processes it does not own
 
 ### `electron/main.cjs`
@@ -144,7 +144,7 @@ The current app is organized into six major workspace zones:
 3. Workspace header with search, scan, and alert tray
 4. Overview summary cards
 5. Dashboard preview panels for processes and port bindings
-6. Dedicated full pages for processes, ports, monitoring, and automation
+6. Dedicated full pages for processes, managed services, ports, monitoring, and automation
 
 This structure keeps the app close to the original mockup mood while making the main surface useful for real local-ops workflows.
 
@@ -152,12 +152,12 @@ This structure keeps the app close to the original mockup mood while making the 
 
 - search input uses `useDeferredValue` to keep filtering responsive
 - workspace changes use `startTransition` to keep view switching lightweight
-- lifecycle actions use `useTransition` to coordinate non-blocking start, stop, restart, and scan operations with the Electron bridge
+- lifecycle actions use `useTransition` to coordinate non-blocking start, stop, restart, save, remove, and scan operations with the Electron bridge
 - the workspace hydrates from the runtime contract and restores saved session state from local storage on boot
 - the sidebar can collapse to icon-only navigation for a roomier workspace
 - process cards can expand in place for more detail before the full inspector is needed
-- toggles update managed-service settings and automation rules through the Electron bridge
-- inspector toggles and lifecycle actions append to stdout/stderr log tails from the live managed runtime
+- managed-service editor changes and automation toggles round-trip through the Electron bridge
+- managed lifecycle actions and explicit command hooks append to stdout/stderr log tails from the live runtime
 - button glow behavior follows Sparklebots interaction patterns
 - progress indicators and animated signal bars add motion without crowding the layout
 - the monitor page now keeps noisy service command details collapsed until explicitly expanded
@@ -168,7 +168,9 @@ This structure keeps the app close to the original mockup mood while making the 
 
 - Electron is the required runtime host, and lifecycle plus managed settings currently cover only services and startup profiles registered in `mewl.services.json`
 - config persistence now assumes a per-user desktop install path rather than a repo-local JSON file
-- promoting an already-running desktop app still cannot guarantee a stable future launch command when that app was started from an ephemeral mount path or wrapper script, so a dedicated manual-management workspace is still the cleaner long-term model
+- shell operators such as pipes, redirects, and compound command chains are still intentionally unsupported in the managed command parser
+- Docker-style helper commands can now be saved explicitly, but richer container-aware state and port introspection still need a future pass
+- the roadmap still favors a deeper split between `Observed` and `Managed`, with observed kill flows and guided create-from-live still pending
 - no auth, multi-user roles, or workspace sync
 - no testing suite yet
 - no packaging for desktop delivery yet
@@ -178,7 +180,8 @@ This structure keeps the app close to the original mockup mood while making the 
 
 - keep expanding the Electron-backed adapter exposed through the runtime provider
 - expand lifecycle control beyond the starter managed-service config and add richer service definitions, environment handling, and exit diagnostics
-- split observed runtime inspection from a dedicated managed-services editor so users can define explicit launch and stop commands instead of relying only on inferred process metadata
+- continue splitting observed runtime inspection from managed-service authoring, including clearer live-only affordances and guided create-from-observed flows
+- keep evolving the managed editor with richer validation, script/Docker ergonomics, and more complete runtime reconciliation
 - add live port discovery and collision detection from the host machine
 - persist workspace profiles, startup groups, and automation presets beyond the single local session model
 - add richer charts, searchable logs, streaming tails, and deeper process detail panes

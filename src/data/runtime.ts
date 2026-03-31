@@ -1,4 +1,10 @@
-export type WorkspaceView = "overview" | "processes" | "ports" | "monitor" | "automation";
+export type WorkspaceView =
+  | "overview"
+  | "processes"
+  | "managed"
+  | "ports"
+  | "monitor"
+  | "automation";
 
 export type ProcessStatus = "running" | "starting" | "degraded" | "stopped";
 
@@ -20,6 +26,17 @@ export type ProcessLogs = {
   stderr: ProcessLogEntry[];
 };
 
+export type ManagedServiceColor = "default" | "rose" | "purple" | "cyan" | "green" | "amber";
+
+export type ManagedServiceIcon =
+  | "server"
+  | "terminal"
+  | "globe"
+  | "database"
+  | "bot"
+  | "workflow"
+  | "sparkles";
+
 export type ManagedProcess = {
   id: string;
   name: string;
@@ -28,6 +45,9 @@ export type ManagedProcess = {
   command: string;
   cwd: string;
   runtime: string;
+  startCommand?: string;
+  stopCommand?: string | null;
+  restartCommand?: string | null;
   status: ProcessStatus;
   pid: number | null;
   ports: number[];
@@ -41,7 +61,22 @@ export type ManagedProcess = {
   autoStart: boolean;
   watchPorts: boolean;
   managed: boolean;
+  titleColor?: ManagedServiceColor;
+  icon?: ManagedServiceIcon;
   logs: ProcessLogs;
+};
+
+export type ManagedServiceDraft = {
+  name: string;
+  description: string;
+  startCommand: string;
+  stopCommand: string;
+  restartCommand: string;
+  cwd: string;
+  autoStart: boolean;
+  watchPorts: boolean;
+  titleColor: ManagedServiceColor;
+  icon: ManagedServiceIcon;
 };
 
 export type PortBinding = {

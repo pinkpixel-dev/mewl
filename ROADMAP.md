@@ -50,7 +50,7 @@
 - `mewl.services.json` now defines Mewl-owned services that can be started, stopped, and restarted through the Electron bridge.
 - Managed autostart and watch-port settings now persist through the Electron bridge and drive the Automation view.
 - Startup profiles and quiet-mode presets can now control grouped managed services, and enabled boot profiles are applied on Electron hydration.
-- Managed launches now enforce explicit env inheritance, repo-bound working directories, executable validation, and reserved-port availability checks.
+- Managed launches now enforce explicit env inheritance, command validation, and reserved-port availability checks.
 - Browser access now stops at the desktop-required state instead of exposing a runtime fallback.
 
 ## Phase 4: Monitoring and Automation
@@ -69,7 +69,72 @@
 - [ ] Surface process crash loops, orphaned ports, and unhealthy resource spikes
 - [ ] Add richer charts for CPU, memory, network, and disk trends
 - [ ] Add automation history for what started, stopped, or failed and why
-- [ ] Split the runtime into separate Observed and Managed workspaces so users can define explicit launch and stop commands instead of relying only on inferred process metadata
+- [ ] Replace the single mixed Processes workspace with a two-part model: `Observed` for live host processes and `Managed` for services Mewl should control intentionally
+
+### Phase 4 Planned Product Slice: Observed + Managed Runtime
+
+This is the main UX split the product now points toward:
+
+- `Observed` = live host inspection, with no long-term ownership assumptions
+- `Managed` = explicit user-authored service definitions that Mewl can reliably start, stop, and restart
+
+#### 4.1 Observed workspace
+
+- [x] Simplify the live `Processes` workspace so it focuses on what is running right now, with expandable inspection and no lifecycle or manage/observe buttons on the cards
+- [ ] Keep `Observed` actions intentionally lightweight: inspect, focus, expand details, and kill the running process when the user explicitly chooses to do so
+- [x] Keep the observed page read-only with respect to long-term service definitions so helper children and wrapper processes never become accidental managed services
+- [ ] Preserve the useful runtime facts on observed rows, such as detected pid, live ports, current status, and last heartbeat, without implying that Mewl owns the launch definition
+- [ ] Make the observed kill action clearly communicate that it is terminating the live process, not editing the managed service catalog
+
+#### 4.2 Managed workspace
+
+- [x] Add a dedicated `Managed` workspace or tab in the sidebar for user-defined services
+- [x] Let users create a managed-service card manually instead of relying on process promotion alone
+- [x] Support explicit fields for managed services: display name, start command, optional start args, working directory, optional stop command, and optional restart command or flow
+- [x] Support fallback stop behavior when no stop command is defined by using process termination for the tracked pid
+- [x] Add restart behavior that prefers explicit restart or stop/start flows instead of guessing from a discovered process
+- [ ] Keep automatic metadata hydration where it is safe: detected pid, detected ports, runtime family, last heartbeat, and current status
+- [x] Allow users to rename managed services without changing the underlying command definition
+- [x] Allow optional visual metadata for managed services such as color coding and a small image or icon
+- [x] Add service notes or description fields so users can document what each managed card is for
+- [x] Add validation that makes the managed editor honest about what Mewl can and cannot reliably start or stop
+- [x] Show a clearer difference between `running now` and `managed by Mewl` in both the sidebar and card badges
+
+#### 4.3 Manual create and migration flow
+
+- [ ] Add a guided flow to create a managed service from an observed process by pre-filling a new managed card instead of silently promoting the live row as-is
+- [ ] Let the guided flow capture the launch command, cwd, ports, and runtime hints while still requiring the user to confirm the final managed definition
+- [ ] Add import and cleanup affordances for existing `mewl.services.json` entries so old inferred configs can be reviewed and corrected in the new managed editor
+- [ ] Normalize older inferred services into the new explicit schema so the app can clearly separate remembered service definitions from current host processes
+
+#### 4.4 Script, wrapper, and Docker support
+
+- [ ] Support script-first and Docker-friendly service definitions so managed entries can launch through wrapper scripts, compose commands, container helpers, or custom stop hooks
+- [ ] Treat Docker start and stop flows as first-class managed actions instead of edge cases hidden behind generic command fields
+- [ ] Allow managed services to declare the exact launch and teardown scripts they need, with `pkill` or tracked-pid termination only as a fallback path
+- [ ] Make the editor flexible enough for shell scripts, package scripts, long-running workers, local daemons, and container-backed tools
+
+#### 4.5 Mental model and labels
+
+- [ ] Keep observed process killing separate from managed lifecycle controls so users always know whether they are stopping a live pid or invoking a saved service definition
+- [ ] Make the sidebar and cards visually reinforce the split between `what is running` and `what Mewl can manage`
+- [ ] Keep ports, status, and heartbeat auto-filled from runtime scans where possible, but keep the authoritative launch command and stop behavior user-authored in `Managed`
+- [ ] Treat Docker, scripts, and custom wrappers as first-class managed-service inputs rather than edge cases
+
+### Phase 4 Planned UX Notes
+
+- `Observed` should answer: "What is running right now?"
+- `Managed` should answer: "What should Mewl know how to control for me?"
+- The same app can appear in both places, but for different reasons: observed because it is currently live, managed because the user saved a real launch definition
+- Ports, status, and heartbeat should auto-fill from runtime scans where possible, but commands should come from the user in the Managed workspace
+- The simplest fallback stop path is `pkill` or pid termination, but that should never replace explicit stop hooks when the user defines them
+- Docker, scripts, and custom wrappers should be treated as first-class managed-service inputs rather than edge cases
+
+### Phase 4 Progress Notes
+
+- The first `Managed` workspace slice is now live: user-authored service cards can be created and edited directly in the app with start, stop, and restart command fields plus notes, colors, and icon choices.
+- The live `Processes` page is now visually lighter and inspection-first, with lifecycle and manage/observe controls removed from those cards and their inspector.
+- The next step inside this phase is the guided create-from-observed flow plus a clearer dedicated `Observed` label and kill action, so the mental model finishes landing.
 
 ## Phase 5: Quality and Delivery
 

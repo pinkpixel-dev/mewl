@@ -121,9 +121,67 @@ async function ensureManagedConfigFile() {
   }
 }
 
+function parseCommandLine(commandLine) {
+  const tokens = [];
+  let current = "";
+  let quote = null;
+  let escaping = false;
+
+  for (const character of commandLine.trim()) {
+    if (escaping) {
+      current += character;
+      escaping = false;
+      continue;
+    }
+
+    if (character === "\\") {
+      escaping = true;
+      continue;
+    }
+
+    if (quote) {
+      if (character === quote) {
+        quote = null;
+      } else {
+        current += character;
+      }
+      continue;
+    }
+
+    if (character === "'" || character === '"') {
+      quote = character;
+      continue;
+    }
+
+    if (/\s/.test(character)) {
+      if (current) {
+        tokens.push(current);
+        current = "";
+      }
+      continue;
+    }
+
+    current += character;
+  }
+
+  if (quote) {
+    throw new Error("Managed command parsing found an unmatched quote.");
+  }
+
+  if (escaping) {
+    current += "\\";
+  }
+
+  if (current) {
+    tokens.push(current);
+  }
+
+  return tokens;
+}
+
 async function resolveExecutable(command, envPath, cwd) {
   if (!command || /\s/.test(command.trim())) {
-    throw new Error("Managed service commands must be a single executable token with no shell parsing.");
+    throw new Error("Managed service commands must start with a real executable token.");
   }
 
   if (command.includes(path.sep)) {
@@ -148,6 +206,19 @@ async function resolveExecutable(command, envPath, cwd) {
   }
 
   throw new Error(`Managed executable "${command}" is not available on the configured PATH.`);
+}
+
+async function resolveCommandSpec(commandLine, envPath, cwd) {
+  const [command, ...args] = parseCommandLine(commandLine);
+  if (!command) {
+    throw new Error("Managed services need a command before they can run.");
+  }
+
+  const executable = await resolveExecutable(command, envPath, cwd);
+  return {
+    executable,
+    args,
+  };
 }
 
 async function runCommandWithFallback(commands) {
@@ -605,11 +676,11 @@ function isHelperProcessRow(processRow) {
 }
 
 function isHelperManagedService(service) {
-  const commandName = path.basename(service.command || "").toLowerCase();
+  const commandName = path.basename(service.startCommand || service.command || "").toLowerCase();
   return (
     commandName.includes("crashpad") ||
-    service.command === "/proc/self/exe" ||
-    service.args.some((arg) => typeof arg === "string" && arg.startsWith("--type="))
+    service.startCommand === "/proc/self/exe" ||
+    String(service.startCommand || service.command || "").includes(" --type=")
   );
 }
 
@@ -620,7 +691,8 @@ function sanitizeManagedService(service) {
 
   return {
     ...service,
-    args: [],
+    stopCommand: service.stopCommand ?? "",
+    restartCommand: service.restartCommand ?? "",
   };
 }
 
@@ -628,8 +700,7 @@ function getManagedServiceDedupKey(service) {
   return [
     service.name.trim().toLowerCase(),
     resolveServiceCwd(service.cwd),
-    service.command,
-    ...(service.args ?? []),
+    service.startCommand || service.command || "",
   ].join("\u0000");
 }
 
@@ -752,12 +823,24 @@ async function loadManagedConfig() {
     const seenServiceKeys = new Set();
     let configChanged = false;
 
-    for (const service of services.filter(
-      (item) => typeof item.id === "string" && typeof item.command === "string",
-    )) {
+    for (const service of services.filter((item) => typeof item.id === "string")) {
       const originalArgs = Array.isArray(service.args)
         ? service.args.filter((value) => typeof value === "string")
         : [];
+      const legacyCommand =
+        typeof service.command === "string"
+          ? [service.command, ...originalArgs].join(" ").trim()
+          : "";
+      const startCommand =
+        typeof service.startCommand === "string" && service.startCommand.trim().length > 0
+          ? service.startCommand.trim()
+          : legacyCommand;
+
+      if (!startCommand) {
+        configChanged = true;
+        continue;
+      }
+
       const normalizedService = sanitizeManagedService({
         id: service.id,
         name: typeof service.name === "string" ? service.name : service.id,
@@ -765,8 +848,11 @@ async function loadManagedConfig() {
           typeof service.description === "string"
             ? service.description
             : "Managed command registered for the Mewl desktop bridge.",
-        command: service.command,
-        args: originalArgs,
+        startCommand,
+        stopCommand:
+          typeof service.stopCommand === "string" ? service.stopCommand.trim() : "",
+        restartCommand:
+          typeof service.restartCommand === "string" ? service.restartCommand.trim() : "",
         cwd: typeof service.cwd === "string" ? service.cwd : ".",
         runtime: typeof service.runtime === "string" ? service.runtime : "",
         group: typeof service.group === "string" ? service.group : "managed",
@@ -788,6 +874,9 @@ async function loadManagedConfig() {
                 ),
               )
             : {},
+        titleColor:
+          typeof service.titleColor === "string" ? service.titleColor : "default",
+        icon: typeof service.icon === "string" ? service.icon : "server",
       });
 
       const dedupKey = getManagedServiceDedupKey(normalizedService);
@@ -799,7 +888,12 @@ async function loadManagedConfig() {
       seenServiceKeys.add(dedupKey);
       normalizedServices.push(normalizedService);
 
-      if (normalizedService.args.length !== originalArgs.length) {
+      if (
+        normalizedService.startCommand !== startCommand ||
+        normalizedService.stopCommand !== (typeof service.stopCommand === "string" ? service.stopCommand.trim() : "") ||
+        normalizedService.restartCommand !==
+          (typeof service.restartCommand === "string" ? service.restartCommand.trim() : "")
+      ) {
         configChanged = true;
       }
     }
@@ -999,6 +1093,59 @@ async function assertReservedPortsAvailable(service, ignoredPids = []) {
   }
 }
 
+async function runManagedCommand(service, commandLine, label) {
+  const serviceState = getManagedState(service.id);
+  const cwd = resolveServiceCwd(service.cwd);
+  const env = buildManagedEnvironment(service);
+  const { executable, args } = await resolveCommandSpec(commandLine, env.PATH, cwd);
+
+  appendManagedLogEntry(
+    serviceState.logs,
+    "stdout",
+    createLogEntry("info", `${label} command requested for ${service.name}.`),
+  );
+
+  try {
+    const result = await execFileAsync(executable, args, {
+      cwd,
+      env,
+      maxBuffer: 12 * 1024 * 1024,
+    });
+
+    if (typeof result.stdout === "string" && result.stdout.trim()) {
+      appendManagedLogEntry(
+        serviceState.logs,
+        "stdout",
+        createLogEntry("info", result.stdout.trim()),
+      );
+    }
+
+    if (typeof result.stderr === "string" && result.stderr.trim()) {
+      appendManagedLogEntry(
+        serviceState.logs,
+        "stderr",
+        createLogEntry("warning", result.stderr.trim()),
+      );
+    }
+
+    markHeartbeat(serviceState, "just now");
+    return;
+  } catch (error) {
+    const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : "";
+    const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : "";
+
+    if (stdout) {
+      appendManagedLogEntry(serviceState.logs, "stdout", createLogEntry("info", stdout));
+    }
+
+    if (stderr) {
+      appendManagedLogEntry(serviceState.logs, "stderr", createLogEntry("error", stderr));
+    }
+
+    throw error;
+  }
+}
+
 async function startManagedService(service) {
   const serviceState = getManagedState(service.id);
   if (isServiceRunning(serviceState)) {
@@ -1016,10 +1163,10 @@ async function startManagedService(service) {
 
   const cwd = resolveServiceCwd(service.cwd);
   const env = buildManagedEnvironment(service);
-  const executable = await resolveExecutable(service.command, env.PATH, cwd);
+  const { executable, args } = await resolveCommandSpec(service.startCommand, env.PATH, cwd);
   await assertReservedPortsAvailable(service, [serviceState.adoptedPid]);
 
-  const child = spawn(executable, service.args, {
+  const child = spawn(executable, args, {
     cwd,
     env,
     stdio: ["ignore", "pipe", "pipe"],
@@ -1057,7 +1204,7 @@ async function waitForPidExit(pid, timeoutMs = 4000) {
 }
 
 function findAdoptableProcessForService(service, rawProcesses, portMap) {
-  const expectedCommand = [service.command, ...(service.args ?? [])].join(" ").trim();
+  const expectedCommand = String(service.startCommand || "").trim();
   const expectedCwd = resolveServiceCwd(service.cwd);
 
   return (
@@ -1148,6 +1295,24 @@ function buildAutomationRules(services, profiles) {
 
 async function stopManagedService(service) {
   const serviceState = getManagedState(service.id);
+  if (service.stopCommand) {
+    serviceState.stopping = true;
+    appendManagedLogEntry(
+      serviceState.logs,
+      "stdout",
+      createLogEntry("warning", `Stop requested for ${service.name}.`),
+    );
+    await runManagedCommand(service, service.stopCommand, "Stop");
+
+    if (serviceState.child && serviceState.child.exitCode === null) {
+      await Promise.race([waitForChildExit(serviceState.child), delay(4000)]);
+    } else if (serviceState.adoptedPid) {
+      await waitForPidExit(serviceState.adoptedPid);
+    }
+
+    return `Stopped ${service.name}.`;
+  }
+
   if (!isServiceRunning(serviceState)) {
     return "Service is already stopped.";
   }
@@ -1208,6 +1373,11 @@ async function stopManagedService(service) {
 async function restartManagedService(service) {
   const serviceState = getManagedState(service.id);
   serviceState.restartCount += 1;
+
+  if (service.restartCommand) {
+    await runManagedCommand(service, service.restartCommand, "Restart");
+    return `Restarted ${service.name}.`;
+  }
 
   if (isServiceRunning(serviceState)) {
     await stopManagedService(service);
@@ -1392,7 +1562,7 @@ async function hydrateRuntimeSnapshot() {
     const liveProcess = childPid ? processByPid.get(childPid) ?? adoptedProcess ?? null : null;
     const livePorts = childPid ? portMap.get(childPid) ?? [] : [];
     const reservedPorts = Array.from(new Set([...service.ports, ...livePorts.map((item) => item.port)]));
-    const runtime = service.runtime || normalizeRuntime(service.command, service.args.join(" "));
+    const runtime = service.runtime || normalizeRuntime(service.startCommand, "");
     const status = serviceState.starting
       ? "starting"
       : liveProcess
@@ -1408,9 +1578,12 @@ async function hydrateRuntimeSnapshot() {
       name: service.name,
       group: service.group,
       description: service.description,
-      command: [service.command, ...service.args].join(" "),
+      command: service.startCommand,
       cwd: resolveServiceCwd(service.cwd),
       runtime,
+      startCommand: service.startCommand,
+      stopCommand: service.stopCommand || null,
+      restartCommand: service.restartCommand || null,
       status,
       pid: childPid,
       ports: reservedPorts,
@@ -1424,6 +1597,8 @@ async function hydrateRuntimeSnapshot() {
       autoStart: service.autoStart,
       watchPorts: service.watchPorts,
       managed: true,
+      titleColor: service.titleColor,
+      icon: service.icon,
       logs: serviceState.logs,
     };
 
@@ -1616,16 +1791,50 @@ async function updateManagedService(processId, updates) {
     throw new Error("Only configured Mewl-managed services can be edited from the desktop bridge.");
   }
 
+  const previousService = config.services[serviceIndex];
+  const startCommand =
+    typeof updates.startCommand === "string"
+      ? updates.startCommand.trim()
+      : previousService.startCommand;
+
+  if (!startCommand) {
+    throw new Error("Managed services need a start command before they can be saved.");
+  }
+
   const nextService = {
-    ...config.services[serviceIndex],
+    ...previousService,
+    name:
+      typeof updates.name === "string" && updates.name.trim().length > 0
+        ? updates.name.trim()
+        : previousService.name,
+    description:
+      typeof updates.description === "string"
+        ? updates.description.trim()
+        : previousService.description,
+    startCommand,
+    stopCommand:
+      typeof updates.stopCommand === "string"
+        ? updates.stopCommand.trim()
+        : previousService.stopCommand,
+    restartCommand:
+      typeof updates.restartCommand === "string"
+        ? updates.restartCommand.trim()
+        : previousService.restartCommand,
+    cwd:
+      typeof updates.cwd === "string" && updates.cwd.trim().length > 0
+        ? updates.cwd.trim()
+        : previousService.cwd,
     autoStart:
       typeof updates.autoStart === "boolean"
         ? updates.autoStart
-        : config.services[serviceIndex].autoStart,
+        : previousService.autoStart,
     watchPorts:
       typeof updates.watchPorts === "boolean"
         ? updates.watchPorts
-        : config.services[serviceIndex].watchPorts,
+        : previousService.watchPorts,
+    titleColor:
+      typeof updates.titleColor === "string" ? updates.titleColor : previousService.titleColor,
+    icon: typeof updates.icon === "string" ? updates.icon : previousService.icon,
   };
 
   config.services[serviceIndex] = nextService;
@@ -1637,107 +1846,72 @@ async function updateManagedService(processId, updates) {
   };
 }
 
-async function setProcessManagement(processId, managed) {
+async function createManagedService(service) {
   const config = await loadManagedConfig();
+  const name = typeof service.name === "string" ? service.name.trim() : "";
+  const startCommand =
+    typeof service.startCommand === "string" ? service.startCommand.trim() : "";
 
-  if (managed) {
-    if (!processId.startsWith("pid-")) {
-      return {
-        snapshot: await hydrateRuntimeSnapshot(),
-        message: "This process is already managed.",
-      };
-    }
+  if (!name || !startCommand) {
+    throw new Error("Managed services need both a name and a start command.");
+  }
 
-    const pid = Number.parseInt(processId.replace("pid-", ""), 10);
-    if (!Number.isInteger(pid)) {
-      throw new Error("The selected process could not be promoted because its pid is invalid.");
-    }
+  const cwd =
+    typeof service.cwd === "string" && service.cwd.trim().length > 0
+      ? service.cwd.trim()
+      : ".";
+  const runtime = normalizeRuntime(startCommand, "");
+  const nextService = {
+    id: createManagedServiceId(name, config.services),
+    name,
+    description:
+      typeof service.description === "string" && service.description.trim().length > 0
+        ? service.description.trim()
+        : "Managed command registered for the Mewl desktop bridge.",
+    startCommand,
+    stopCommand:
+      typeof service.stopCommand === "string" ? service.stopCommand.trim() : "",
+    restartCommand:
+      typeof service.restartCommand === "string" ? service.restartCommand.trim() : "",
+    cwd,
+    runtime,
+    group: normalizeGroup(runtime, cwd),
+    watchPorts: service.watchPorts !== false,
+    autoStart: service.autoStart === true,
+    ports: [],
+    inheritEnv: [...defaultInheritedEnvKeys],
+    env: {},
+    titleColor: typeof service.titleColor === "string" ? service.titleColor : "default",
+    icon: typeof service.icon === "string" ? service.icon : "server",
+  };
 
-    const [rawProcesses, rawBindings, argv] = await Promise.all([
-      readUserProcesses(),
-      readPortBindings(),
-      readProcessCommandLine(pid),
-    ]);
-    const processRow = rawProcesses.find((item) => item.pid === pid);
+  const existingService = config.services.find(
+    (entry) => getManagedServiceDedupKey(entry) === getManagedServiceDedupKey(nextService),
+  );
 
-    if (!processRow) {
-      throw new Error("The selected observed process is no longer running.");
-    }
-
-    const processByPid = new Map(rawProcesses.map((item) => [item.pid, item]));
-    const promotableProcess = findPromotableProcess(processRow, processByPid);
-
-    if (!promotableProcess) {
-      throw new Error(
-        "Select the main app row instead of an internal helper process. Mewl can only manage the launchable parent.",
-      );
-    }
-
-    const portMap = new Map();
-    for (const binding of rawBindings) {
-      const list = portMap.get(binding.pid) ?? [];
-      list.push(binding);
-      portMap.set(binding.pid, list);
-    }
-
-    const promotableArgv =
-      promotableProcess.pid === pid ? argv : await readProcessCommandLine(promotableProcess.pid);
-    const executable = promotableArgv[0] ?? getProcessExecutable(promotableProcess);
-    const args = promotableArgv.length > 1 ? promotableArgv.slice(1) : [];
-    const runtime = normalizeRuntime(promotableProcess.command, promotableProcess.args);
-    const cwd = promotableProcess.cwd || os.homedir();
-    const ports = Array.from(
-      new Set((portMap.get(promotableProcess.pid) ?? []).map((binding) => binding.port)),
-    ).sort((left, right) => left - right);
-    const name = createManagedServiceName(promotableProcess);
-    const existingService = config.services.find(
-      (service) =>
-        getManagedServiceDedupKey(service) ===
-        getManagedServiceDedupKey({
-          name,
-          cwd,
-          command: executable,
-          args,
-        }),
-    );
-
-    if (existingService) {
-      return {
-        snapshot: await hydrateRuntimeSnapshot(),
-        message: `${existingService.name} is already managed by Mewl.`,
-      };
-    }
-
-    const nextService = {
-      id: createManagedServiceId(name, config.services),
-      name,
-      description: `Managed from the live host scan by Mewl.`,
-      command: executable,
-      args,
-      cwd,
-      runtime,
-      group: normalizeGroup(runtime, cwd),
-      watchPorts: ports.length > 0,
-      autoStart: false,
-      ports,
-      inheritEnv: [...defaultInheritedEnvKeys],
-      env: {},
-    };
-
-    config.services.push(nextService);
-    await saveManagedConfig(config);
-
+  if (existingService) {
     return {
       snapshot: await hydrateRuntimeSnapshot(),
-      message: `${nextService.name} is now managed by Mewl.`,
+      message: `${existingService.name} is already managed by Mewl.`,
     };
   }
 
+  config.services.push(nextService);
+  await saveManagedConfig(config);
+
+  return {
+    snapshot: await hydrateRuntimeSnapshot(),
+    message: `${nextService.name} is now managed by Mewl.`,
+  };
+}
+
+async function removeManagedService(processId) {
+  const config = await loadManagedConfig();
   const serviceIndex = config.services.findIndex((service) => service.id === processId);
   if (serviceIndex === -1) {
     return {
       snapshot: await hydrateRuntimeSnapshot(),
-      message: "This process is already observed.",
+      message: "This managed service was already removed.",
     };
   }
 
@@ -1821,8 +1995,9 @@ async function shutdownManagedServices() {
 module.exports = {
   hydrateRuntimeSnapshot,
   performProcessAction,
-  setProcessManagement,
   updateManagedService,
+  createManagedService,
+  removeManagedService,
   applyAutomationRule,
   shutdownManagedServices,
 };

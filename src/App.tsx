@@ -15,14 +15,20 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Database,
   Gauge,
+  Globe,
   LayoutDashboard,
+  PenSquare,
   Play,
+  Plus,
   RefreshCw,
+  Sparkles,
   Server,
   ShieldCheck,
   Square,
   Terminal,
+  Trash2,
   Waypoints,
   Workflow,
 } from "lucide-react";
@@ -39,6 +45,9 @@ import {
   type AlertRecord,
   type AlertSeverity,
   type AutomationRule,
+  type ManagedServiceColor,
+  type ManagedServiceDraft,
+  type ManagedServiceIcon,
   type ManagedProcess,
   type MonitorMetric,
   type PortBinding,
@@ -67,6 +76,7 @@ type PersistedWorkspaceState = {
     statusFilter: StatusFilter;
     sidebarCollapsed: boolean;
     selectedProcessId: string;
+    selectedManagedServiceId: string;
     expandedProcessIds: string[];
   };
   runtime: {
@@ -102,6 +112,7 @@ const viewMeta: Array<{
 }> = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, hex: accent.rose },
   { id: "processes", label: "Processes", icon: Server, hex: accent.cyan },
+  { id: "managed", label: "Managed", icon: Sparkles, hex: accent.rose },
   { id: "ports", label: "Ports", icon: Waypoints, hex: accent.purple },
   { id: "monitor", label: "Monitor", icon: Activity, hex: accent.amber },
   { id: "automation", label: "Automation", icon: Bot, hex: accent.green },
@@ -157,6 +168,44 @@ const workspaceStorageKey = "mewl.workspace.v1";
 const processLogTailLimit = 10;
 const defaultCommandState = "Ready to manage local services, ports, and runtime pressure.";
 
+const managedServiceColorMap: Record<ManagedServiceColor, string> = {
+  default: "#ffffff",
+  rose: accent.rose,
+  purple: accent.purple,
+  cyan: accent.cyan,
+  green: accent.green,
+  amber: accent.amber,
+};
+
+const managedServiceColorOptions: Array<{ id: ManagedServiceColor; label: string }> = [
+  { id: "default", label: "White" },
+  { id: "rose", label: "Rose" },
+  { id: "purple", label: "Purple" },
+  { id: "cyan", label: "Cyan" },
+  { id: "green", label: "Green" },
+  { id: "amber", label: "Amber" },
+];
+
+const managedServiceIconMap: Record<ManagedServiceIcon, typeof Server> = {
+  server: Server,
+  terminal: Terminal,
+  globe: Globe,
+  database: Database,
+  bot: Bot,
+  workflow: Workflow,
+  sparkles: Sparkles,
+};
+
+const managedServiceIconOptions: Array<{ id: ManagedServiceIcon; label: string }> = [
+  { id: "server", label: "Server" },
+  { id: "terminal", label: "Terminal" },
+  { id: "globe", label: "Globe" },
+  { id: "database", label: "Database" },
+  { id: "bot", label: "Bot" },
+  { id: "workflow", label: "Workflow" },
+  { id: "sparkles", label: "Sparkles" },
+];
+
 const logLevelTextClassMap: Record<ProcessLogLevel, string> = {
   info: "text-emerald-200",
   debug: "text-cyan-200",
@@ -173,6 +222,32 @@ const formatLogStamp = () =>
   }).format(new Date());
 
 const trimLogTail = (entries: ProcessLogEntry[]) => entries.slice(-processLogTailLimit);
+
+const createEmptyManagedDraft = (): ManagedServiceDraft => ({
+  name: "",
+  description: "",
+  startCommand: "",
+  stopCommand: "",
+  restartCommand: "",
+  cwd: ".",
+  autoStart: false,
+  watchPorts: true,
+  titleColor: "default",
+  icon: "server",
+});
+
+const createDraftFromManagedProcess = (process: ManagedProcess): ManagedServiceDraft => ({
+  name: process.name,
+  description: process.description,
+  startCommand: process.startCommand ?? process.command,
+  stopCommand: process.stopCommand ?? "",
+  restartCommand: process.restartCommand ?? "",
+  cwd: process.cwd,
+  autoStart: process.autoStart,
+  watchPorts: process.watchPorts,
+  titleColor: process.titleColor ?? "default",
+  icon: process.icon ?? "server",
+});
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -214,6 +289,10 @@ function readPersistedWorkspace(): PersistedWorkspaceState | null {
         typeof preferences.sidebarCollapsed === "boolean" ? preferences.sidebarCollapsed : false,
       selectedProcessId:
         typeof preferences.selectedProcessId === "string" ? preferences.selectedProcessId : "",
+      selectedManagedServiceId:
+        typeof preferences.selectedManagedServiceId === "string"
+          ? preferences.selectedManagedServiceId
+          : "",
       expandedProcessIds: Array.isArray(preferences.expandedProcessIds)
         ? preferences.expandedProcessIds.filter((value): value is string => typeof value === "string")
         : [],
@@ -248,8 +327,11 @@ function App() {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedProcessId, setSelectedProcessId] = useState("");
+  const [selectedManagedServiceId, setSelectedManagedServiceId] = useState("");
   const [expandedProcessIds, setExpandedProcessIds] = useState<string[]>([]);
   const [expandedResourceDrawIds, setExpandedResourceDrawIds] = useState<string[]>([]);
+  const [managedEditorMode, setManagedEditorMode] = useState<"create" | "edit">("edit");
+  const [managedDraft, setManagedDraft] = useState<ManagedServiceDraft>(createEmptyManagedDraft);
   const [processes, setProcesses] = useState<ManagedProcess[]>([]);
   const [ports, setPorts] = useState<PortBinding[]>([]);
   const [alerts, setAlerts] = useState<AlertRecord[]>([]);
@@ -270,6 +352,11 @@ function App() {
       snapshot.processes.some((process) => process.id === current)
         ? current
         : (snapshot.processes[0]?.id ?? ""),
+    );
+    setSelectedManagedServiceId((current) =>
+      snapshot.processes.some((process) => process.id === current && process.managed)
+        ? current
+        : (snapshot.processes.find((process) => process.managed)?.id ?? ""),
     );
   };
 
@@ -314,6 +401,11 @@ function App() {
         setSelectedProcessId(
           persisted?.preferences.selectedProcessId || fallbackSelectedProcessId,
         );
+        setSelectedManagedServiceId(
+          persisted?.preferences.selectedManagedServiceId ||
+            hydratedProcesses.find((process) => process.managed)?.id ||
+            "",
+        );
         setRuntimeStatus("ready");
       } catch (error) {
         if (cancelled) {
@@ -349,6 +441,7 @@ function App() {
         statusFilter,
         sidebarCollapsed,
         selectedProcessId,
+        selectedManagedServiceId,
         expandedProcessIds,
       },
       runtime: {
@@ -369,6 +462,7 @@ function App() {
     processes,
     query,
     runtimeStatus,
+    selectedManagedServiceId,
     selectedProcessId,
     sidebarCollapsed,
     statusFilter,
@@ -379,8 +473,16 @@ function App() {
       return;
     }
 
-    setSelectedProcessId(processes[0].id);
+    setSelectedProcessId(processes.find((process) => process.status !== "stopped")?.id ?? "");
   }, [processes, runtimeStatus, selectedProcessId]);
+
+  useEffect(() => {
+    if (runtimeStatus !== "ready" || selectedManagedServiceId) {
+      return;
+    }
+
+    setSelectedManagedServiceId(processes.find((process) => process.managed)?.id ?? "");
+  }, [processes, runtimeStatus, selectedManagedServiceId]);
 
   const deferredQuery = useDeferredValue(query);
   const searchValue = deferredQuery.trim().toLowerCase();
@@ -422,12 +524,20 @@ function App() {
           .includes(searchValue)
       : true,
   );
+  const liveProcesses = filteredProcesses.filter((process) => process.status !== "stopped");
+  const managedServices = filteredProcesses.filter((process) => process.managed);
 
   const selectedProcess =
-    filteredProcesses.find((process) => process.id === selectedProcessId) ??
+    liveProcesses.find((process) => process.id === selectedProcessId) ??
     processes.find((process) => process.id === selectedProcessId) ??
-    filteredProcesses[0] ??
-    processes[0] ??
+    liveProcesses[0] ??
+    processes.find((process) => process.status !== "stopped") ??
+    null;
+  const selectedManagedService =
+    managedServices.find((process) => process.id === selectedManagedServiceId) ??
+    processes.find((process) => process.id === selectedManagedServiceId && process.managed) ??
+    managedServices[0] ??
+    processes.find((process) => process.managed) ??
     null;
   const canControlProcess = (process: ManagedProcess | null) =>
     runtimeStatus === "ready" && Boolean(process?.managed);
@@ -457,9 +567,7 @@ function App() {
   const busiestProcesses = [...processes]
     .sort((left, right) => right.cpu + right.memory / 20 - (left.cpu + left.memory / 20))
     .slice(0, 4);
-  const previewProcesses = filteredProcesses
-    .filter((process) => process.status !== "stopped")
-    .slice(0, 4);
+  const previewProcesses = liveProcesses.slice(0, 4);
   const previewPorts = filteredPorts.filter((port) => port.status !== "standby").slice(0, 4);
   const dashboardMetrics = monitorMetrics.slice(0, 3);
   const runtimeIndicatorTone =
@@ -479,6 +587,8 @@ function App() {
     setSidebarCollapsed(false);
     setExpandedProcessIds([]);
     setAlertsOpen(false);
+    setManagedEditorMode("edit");
+    setManagedDraft(createEmptyManagedDraft());
 
     void hydrateRuntimeSnapshot()
       .then((snapshot) => {
@@ -490,6 +600,7 @@ function App() {
         setCommandState(defaultCommandState);
         setActiveView("overview");
         setSelectedProcessId(snapshot.processes[0]?.id ?? "");
+        setSelectedManagedServiceId(snapshot.processes.find((process) => process.managed)?.id ?? "");
         setRuntimeError(null);
         setRuntimeStatus("ready");
       })
@@ -502,6 +613,19 @@ function App() {
         );
       });
   };
+
+  useEffect(() => {
+    if (managedEditorMode === "create") {
+      return;
+    }
+
+    if (selectedManagedService) {
+      setManagedDraft(createDraftFromManagedProcess(selectedManagedService));
+      return;
+    }
+
+    setManagedDraft(createEmptyManagedDraft());
+  }, [managedEditorMode, selectedManagedService]);
 
   const createProcessLogEntry = (level: ProcessLogLevel, text: string): ProcessLogEntry => ({
     id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -551,16 +675,6 @@ function App() {
       },
       ...current,
     ].slice(0, 6));
-  };
-
-  const updateSelectedProcess = (updater: (process: ManagedProcess) => ManagedProcess) => {
-    if (!selectedProcess) {
-      return;
-    }
-
-    setProcesses((current) =>
-      current.map((process) => (process.id === selectedProcess.id ? updater(process) : process)),
-    );
   };
 
   const changeView = (nextView: WorkspaceView) => {
@@ -877,25 +991,20 @@ function App() {
     });
   };
 
-  const renderLifecycleControls = (process: ManagedProcess, compact = false) => (
-    <div className={`grid gap-2 ${compact ? "grid-cols-3" : "sm:grid-cols-3"}`}>
+  const renderManagedLifecycleIcons = (process: ManagedProcess) => (
+    <div className="flex items-center gap-2">
       {(["start", "stop", "restart"] as const).map((action) => {
         const { label, hex, icon } = lifecycleActionMeta[action];
-        return (
-          <ShinyButton
-            key={`${process.id}-${action}`}
-            label={label}
-            hex={hex}
-            icon={icon}
-            subtle
-            className={compact ? "px-3 py-2 [&_span.text-sm]:text-xs" : ""}
-            disabled={!canControlProcess(process) || isPending || runtimeStatus !== "ready"}
-            onClick={() => {
-              setSelectedProcessId(process.id);
-              handleProcessAction(action, process);
-            }}
-          />
-        );
+        return renderManagedActionButton({
+          label,
+          icon,
+          hex,
+          disabled: !canControlProcess(process) || isPending || runtimeStatus !== "ready",
+          onClick: () => {
+            setSelectedManagedServiceId(process.id);
+            handleProcessAction(action, process);
+          },
+        });
       })}
     </div>
   );
@@ -906,66 +1015,131 @@ function App() {
     </span>
   );
 
-  const focusProcessFromSnapshot = (snapshot: RuntimeSnapshot, process: ManagedProcess) => {
+  const focusManagedServiceFromSnapshot = (snapshot: RuntimeSnapshot, processId: string) => {
     const matchedProcess =
-      snapshot.processes.find(
-        (item) =>
-          item.pid === process.pid &&
-          item.command === process.command &&
-          item.cwd === process.cwd,
-      ) ??
-      snapshot.processes.find(
-        (item) => item.name === process.name && item.command === process.command && item.cwd === process.cwd,
-      ) ??
-      snapshot.processes[0];
+      snapshot.processes.find((item) => item.id === processId && item.managed) ??
+      snapshot.processes.find((item) => item.managed) ??
+      null;
 
     if (matchedProcess) {
-      setSelectedProcessId(matchedProcess.id);
+      setSelectedManagedServiceId(matchedProcess.id);
+      setManagedEditorMode("edit");
     }
   };
 
-  const toggleProcessManagement = (process: ManagedProcess, nextManaged: boolean) => {
+  const saveManagedDraft = () => {
     if (runtimeStatus !== "ready") {
       return;
     }
 
     if (isLiveElectronRuntime) {
-      const setProcessManagement = window.mewlHost?.setProcessManagement;
+      const createManagedService = window.mewlHost?.createManagedService;
+      const updateManagedService = window.mewlHost?.updateManagedService;
 
-      if (!setProcessManagement) {
-        setCommandState("The Electron bridge is missing its process-management handler.");
+      if (
+        (managedEditorMode === "create" && !createManagedService) ||
+        (managedEditorMode === "edit" && !updateManagedService)
+      ) {
+        setCommandState("The Electron bridge is missing its managed-service editor handlers.");
         return;
       }
 
       startActionTransition(async () => {
         try {
-          const result = await setProcessManagement(process.id, nextManaged);
+          const result =
+            managedEditorMode === "create"
+              ? await createManagedService?.(managedDraft)
+              : await updateManagedService?.(selectedManagedServiceId, managedDraft);
+
+          if (!result) {
+            setCommandState("The desktop bridge did not return a managed-service result.");
+            return;
+          }
+
           applyRuntimeSnapshot(result.snapshot);
           setCommandState(result.message);
           setAlertsOpen(false);
-          focusProcessFromSnapshot(result.snapshot, process);
+          focusManagedServiceFromSnapshot(
+            result.snapshot,
+            managedEditorMode === "create"
+              ? result.snapshot.processes.find(
+                  (item) =>
+                    item.managed &&
+                    item.name === managedDraft.name &&
+                    item.command === managedDraft.startCommand,
+                )?.id ?? selectedManagedServiceId
+              : selectedManagedServiceId,
+          );
         } catch (error) {
           setCommandState(
             error instanceof Error
               ? error.message
-              : "The desktop bridge could not update process management.",
+              : "The desktop bridge could not save the managed service.",
           );
         }
       });
       return;
     }
 
-    setCommandState("Process management is only available from the Electron desktop bridge.");
+    setCommandState("Managed services can only be edited from the Electron desktop bridge.");
   };
 
-  const renderProcessManagementButton = (process: ManagedProcess) => (
+  const removeManagedDraft = () => {
+    if (runtimeStatus !== "ready" || !selectedManagedServiceId) {
+      return;
+    }
+
+    if (isLiveElectronRuntime) {
+      const removeManagedService = window.mewlHost?.removeManagedService;
+
+      if (!removeManagedService) {
+        setCommandState("The Electron bridge is missing its managed-service removal handler.");
+        return;
+      }
+
+      startActionTransition(async () => {
+        try {
+          const result = await removeManagedService(selectedManagedServiceId);
+          applyRuntimeActionResult(result);
+          setManagedEditorMode("create");
+          setManagedDraft(createEmptyManagedDraft());
+        } catch (error) {
+          setCommandState(
+            error instanceof Error
+              ? error.message
+              : "The desktop bridge could not remove the managed service.",
+          );
+        }
+      });
+      return;
+    }
+
+    setCommandState("Managed services can only be removed from the Electron desktop bridge.");
+  };
+
+  const renderManagedActionButton = ({
+    label,
+    icon: Icon,
+    hex,
+    onClick,
+    disabled = false,
+  }: {
+    label: string;
+    icon: typeof Play;
+    hex: string;
+    onClick: () => void;
+    disabled?: boolean;
+  }) => (
     <button
       type="button"
-      onClick={() => toggleProcessManagement(process, !process.managed)}
-      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/18 px-3 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
-      disabled={isPending || runtimeStatus !== "ready"}
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className="grid size-10 place-items-center rounded-[18px] border border-white/10 bg-black/18 text-white/70 transition duration-300 hover:-translate-y-0.5 hover:border-white/18 hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
+      style={{ boxShadow: `0 0 28px ${hex}18` }}
+      disabled={disabled}
     >
-      {process.managed ? "Observe" : "Manage"}
+      <Icon size={16} />
     </button>
   );
 
@@ -1115,19 +1289,12 @@ function App() {
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <StatusPill tone={processToneMap[selectedProcess.status]} label={selectedProcess.status} />
           {renderProcessOwnershipTag(selectedProcess)}
-          {renderProcessManagementButton(selectedProcess)}
           <span className="rounded-full border border-white/8 bg-black/18 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/48">
             pid {selectedProcess.pid ?? "none"}
           </span>
         </div>
 
         <p className="mt-4 text-sm text-white/56">{selectedProcess.description}</p>
-
-        {selectedProcess.managed ? (
-          <div className="mt-5">
-            {renderLifecycleControls(selectedProcess)}
-          </div>
-        ) : null}
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
@@ -1169,105 +1336,6 @@ function App() {
               no ports reserved
             </span>
           )}
-        </div>
-
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">
-          <SweetToggle
-            label="Autostart"
-            checked={selectedProcess.autoStart}
-            onChange={(next) => {
-              if (isLiveElectronRuntime) {
-                const updateManagedService = window.mewlHost?.updateManagedService;
-
-                if (!selectedProcess.managed || !updateManagedService) {
-                  setCommandState(
-                    "Only configured Mewl-managed services can change autostart in the desktop shell.",
-                  );
-                  return;
-                }
-
-                startActionTransition(async () => {
-                  try {
-                    const result = await updateManagedService(selectedProcess.id, {
-                      autoStart: next,
-                    });
-                    applyRuntimeActionResult(result);
-                  } catch (error) {
-                    setCommandState(
-                      error instanceof Error
-                        ? error.message
-                        : "The desktop bridge could not save the autostart setting.",
-                    );
-                  }
-                });
-                return;
-              }
-
-              updateSelectedProcess((process) => ({ ...process, autoStart: next }));
-              appendProcessLogs(selectedProcess.id, [
-                {
-                  ...createProcessLogEntry(
-                    "info",
-                    `Autostart was ${next ? "enabled" : "disabled"} from the inspector.`,
-                  ),
-                  stream: "stdout",
-                },
-              ]);
-              setCommandState(
-                `${selectedProcess.name} autostart ${next ? "enabled" : "disabled"}.`,
-              );
-            }}
-            hex={accent.rose}
-            disabled={isLiveElectronRuntime && !selectedProcess.managed}
-          />
-          <SweetToggle
-            label="Watch ports"
-            checked={selectedProcess.watchPorts}
-            onChange={(next) => {
-              if (isLiveElectronRuntime) {
-                const updateManagedService = window.mewlHost?.updateManagedService;
-
-                if (!selectedProcess.managed || !updateManagedService) {
-                  setCommandState(
-                    "Only configured Mewl-managed services can change watch-port settings in the desktop shell.",
-                  );
-                  return;
-                }
-
-                startActionTransition(async () => {
-                  try {
-                    const result = await updateManagedService(selectedProcess.id, {
-                      watchPorts: next,
-                    });
-                    applyRuntimeActionResult(result);
-                  } catch (error) {
-                    setCommandState(
-                      error instanceof Error
-                        ? error.message
-                        : "The desktop bridge could not save the watch-port setting.",
-                    );
-                  }
-                });
-                return;
-              }
-
-              updateSelectedProcess((process) => ({ ...process, watchPorts: next }));
-              appendProcessLogs(selectedProcess.id, [
-                {
-                  ...createProcessLogEntry(
-                    next ? "info" : "warning",
-                    `Port watch was ${next ? "enabled" : "paused"} for this process.`,
-                  ),
-                  stream: next ? "stdout" : "stderr",
-                },
-              ]);
-              setCommandState(
-                `${selectedProcess.name} port watch ${next ? "enabled" : "paused"}.`,
-              );
-            }}
-            hex={accent.purple}
-            disabled={isLiveElectronRuntime && !selectedProcess.managed}
-          />
         </div>
 
         <div className="mt-5 grid gap-3 lg:grid-cols-3">
@@ -1442,14 +1510,6 @@ function App() {
                       <p className="mt-2 text-white/84">{process.memory} MB</p>
                     </div>
                   </div>
-                  {process.managed ? (
-                    <div
-                      className="mt-4"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      {renderLifecycleControls(process, true)}
-                    </div>
-                  ) : null}
                 </button>
               ))
             ) : (
@@ -1570,9 +1630,9 @@ function App() {
 
   const renderProcessesPage = () => (
     <>
-      {filteredProcesses.length > 0 ? (
+      {liveProcesses.length > 0 ? (
         <section className="grid gap-4 xl:grid-cols-3">
-          {filteredProcesses.map((process) => {
+          {liveProcesses.map((process) => {
           const isExpanded = expandedProcessIds.includes(process.id);
           const isSelected = selectedProcess?.id === process.id;
 
@@ -1631,16 +1691,6 @@ function App() {
                 {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </button>
 
-              <div className="mt-4">
-                {renderProcessManagementButton(process)}
-              </div>
-
-              {process.managed ? (
-                <div className="mt-4">
-                  {renderLifecycleControls(process, true)}
-                </div>
-              ) : null}
-
               {isExpanded ? (
                 <div className="mt-5 space-y-4 border-t border-white/8 pt-5">
                   <p className="text-sm text-white/56">{process.description}</p>
@@ -1676,11 +1726,11 @@ function App() {
       ) : (
         renderStatePanel({
           eyebrow: "Processes",
-          title: "No services match this filter",
+          title: "No live processes match this filter",
           detail:
             searchValue.length > 0
-              ? `The current query "${query}" and process filter do not match any managed service.`
-              : "No managed services are available from the current runtime snapshot.",
+              ? `The current query "${query}" and process filter do not match any live process.`
+              : "No live processes are available from the current runtime snapshot.",
           hex: accent.cyan,
           icon: Server,
           actionLabel: "Reset Filters",
@@ -1691,8 +1741,359 @@ function App() {
         })
       )}
 
-      {filteredProcesses.length > 0 ? renderInspector() : null}
+      {liveProcesses.length > 0 ? renderInspector() : null}
     </>
+  );
+
+  const renderManagedPage = () => (
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.92fr)]">
+      <div className={panelClass}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.24em] text-white/42">Managed Services</p>
+            <h3 className="mt-2 text-2xl font-semibold text-white">Command Deck</h3>
+            <p className="mt-3 max-w-2xl text-sm text-white/56">
+              Save the services Mewl should know how to launch, stop, and restart for you. Live
+              ports, pid, heartbeat, and runtime state still hydrate from the host scan.
+            </p>
+          </div>
+          <ShinyButton
+            label="New Service"
+            hex={accent.rose}
+            icon={Plus}
+            subtle
+            onClick={() => {
+              setManagedEditorMode("create");
+              setSelectedManagedServiceId("");
+              setManagedDraft(createEmptyManagedDraft());
+            }}
+          />
+        </div>
+
+        <div className="mt-6 space-y-3">
+          {managedServices.length > 0 ? (
+            managedServices.map((process) => {
+              const isSelected = selectedManagedService?.id === process.id && managedEditorMode === "edit";
+              const titleHex = managedServiceColorMap[process.titleColor ?? "default"];
+              const Icon = managedServiceIconMap[process.icon ?? "server"];
+
+              return (
+                <article
+                  key={process.id}
+                  className="rounded-[28px] border border-white/8 bg-[#0f141b]/94 p-4 transition duration-300"
+                  style={
+                    isSelected
+                      ? ({
+                          boxShadow: `inset 0 0 0 1px ${titleHex}30, 0 28px 86px -58px ${titleHex}`,
+                        } satisfies CSSProperties)
+                      : undefined
+                  }
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setManagedEditorMode("edit");
+                        setSelectedManagedServiceId(process.id);
+                        setSelectedProcessId(process.id);
+                      }}
+                      className="flex min-w-0 flex-1 items-start gap-4 text-left"
+                    >
+                      <span
+                        className="grid size-12 shrink-0 place-items-center rounded-[20px] border border-white/10 bg-black/18"
+                        style={{
+                          color: titleHex,
+                          boxShadow: `0 0 28px ${titleHex}24`,
+                        }}
+                      >
+                        <Icon size={20} />
+                      </span>
+                      <span className="min-w-0">
+                        <span
+                          className="block truncate text-lg font-semibold"
+                          style={{ color: titleHex }}
+                        >
+                          {process.name}
+                        </span>
+                        <span className="mt-1 block text-sm text-white/54">
+                          {process.description || "No description yet."}
+                        </span>
+                        <span className="mt-3 block truncate font-mono text-xs text-white/34">
+                          {process.startCommand ?? process.command}
+                        </span>
+                      </span>
+                    </button>
+
+                    <div className="flex flex-col items-end gap-2">
+                      <StatusPill tone={processToneMap[process.status]} label={process.status} />
+                      {renderProcessOwnershipTag(process)}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    {[
+                      ["PID", process.pid ? `${process.pid}` : "idle"],
+                      ["Ports", process.ports.length > 0 ? process.ports.join(", ") : "none"],
+                      ["Pulse", process.lastHeartbeat],
+                    ].map(([label, value]) => (
+                      <div
+                        key={label}
+                        className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-3"
+                      >
+                        <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">
+                          {label}
+                        </p>
+                        <p className="mt-2 text-sm text-white/84">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/8 pt-4">
+                    {renderManagedLifecycleIcons(process)}
+                    <div className="flex items-center gap-2">
+                      {renderManagedActionButton({
+                        label: "Edit service",
+                        icon: PenSquare,
+                        hex: titleHex,
+                        onClick: () => {
+                          setManagedEditorMode("edit");
+                          setSelectedManagedServiceId(process.id);
+                        },
+                      })}
+                    </div>
+                  </div>
+                </article>
+              );
+            })
+          ) : (
+            <div className="rounded-[28px] border border-dashed border-white/10 bg-black/18 px-5 py-8 text-sm text-white/52">
+              Create your first managed service to give Mewl a real launch definition instead of
+              relying on a discovered process snapshot.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className={panelClass}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.24em] text-white/42">
+              {managedEditorMode === "create" ? "Create Managed Service" : "Edit Managed Service"}
+            </p>
+            <h3 className="mt-2 text-2xl font-semibold text-white">
+              {managedEditorMode === "create"
+                ? "Author a launch definition"
+                : selectedManagedService?.name ?? "Managed editor"}
+            </h3>
+            <p className="mt-3 text-sm text-white/56">
+              Keep the command honest here. Leave stop or restart blank when a tracked pid fallback
+              is good enough, or define explicit commands for Docker, wrappers, and custom flows.
+            </p>
+          </div>
+
+          {managedEditorMode === "edit" && selectedManagedService ? (
+            renderManagedActionButton({
+              label: "Remove managed service",
+              icon: Trash2,
+              hex: accent.rose,
+              onClick: removeManagedDraft,
+              disabled: isPending || runtimeStatus !== "ready",
+            })
+          ) : null}
+        </div>
+
+        <div className="mt-6 space-y-4">
+          <label className="block">
+            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">Name</p>
+            <input
+              className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+              value={managedDraft.name}
+              onChange={(event) =>
+                setManagedDraft((current) => ({ ...current, name: event.target.value }))
+              }
+              placeholder="MyApp"
+            />
+          </label>
+
+          <label className="block">
+            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">Description</p>
+            <textarea
+              className="mt-2 min-h-[90px] w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+              value={managedDraft.description}
+              onChange={(event) =>
+                setManagedDraft((current) => ({ ...current, description: event.target.value }))
+              }
+              placeholder="What this service does and why you keep it around."
+            />
+          </label>
+
+          <div className="grid gap-4">
+            <label className="block">
+              <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                Start Command
+              </p>
+              <input
+                className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
+                value={managedDraft.startCommand}
+                onChange={(event) =>
+                  setManagedDraft((current) => ({
+                    ...current,
+                    startCommand: event.target.value,
+                  }))
+                }
+                placeholder="npm start"
+              />
+            </label>
+
+            <label className="block">
+              <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                Stop Command
+              </p>
+              <input
+                className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
+                value={managedDraft.stopCommand}
+                onChange={(event) =>
+                  setManagedDraft((current) => ({ ...current, stopCommand: event.target.value }))
+                }
+                placeholder="Optional. Leave blank to stop by tracked pid."
+              />
+            </label>
+
+            <label className="block">
+              <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                Restart Command
+              </p>
+              <input
+                className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
+                value={managedDraft.restartCommand}
+                onChange={(event) =>
+                  setManagedDraft((current) => ({
+                    ...current,
+                    restartCommand: event.target.value,
+                  }))
+                }
+                placeholder="Optional. Leave blank for stop/start."
+              />
+            </label>
+          </div>
+
+          <label className="block">
+            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+              Working Directory
+            </p>
+            <input
+              className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
+              value={managedDraft.cwd}
+              onChange={(event) =>
+                setManagedDraft((current) => ({ ...current, cwd: event.target.value }))
+              }
+              placeholder="."
+            />
+          </label>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <SweetToggle
+              label="Autostart"
+              checked={managedDraft.autoStart}
+              onChange={(next) =>
+                setManagedDraft((current) => ({ ...current, autoStart: next }))
+              }
+              hex={accent.rose}
+            />
+            <SweetToggle
+              label="Watch ports"
+              checked={managedDraft.watchPorts}
+              onChange={(next) =>
+                setManagedDraft((current) => ({ ...current, watchPorts: next }))
+              }
+              hex={accent.purple}
+            />
+          </div>
+
+          <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">Title Color</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              {managedServiceColorOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() =>
+                    setManagedDraft((current) => ({ ...current, titleColor: option.id }))
+                  }
+                  className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs uppercase tracking-[0.22em] transition duration-300 ${
+                    managedDraft.titleColor === option.id
+                      ? "border-white/16 bg-black/26 text-white"
+                      : "border-white/8 bg-black/14 text-white/48 hover:text-white/76"
+                  }`}
+                >
+                  <span
+                    className="size-3 rounded-full border border-white/10"
+                    style={{ backgroundColor: managedServiceColorMap[option.id] }}
+                  />
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">Card Icon</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {managedServiceIconOptions.map((option) => {
+                const Icon = managedServiceIconMap[option.id];
+                const selected = managedDraft.icon === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setManagedDraft((current) => ({ ...current, icon: option.id }))}
+                    className={`flex items-center gap-3 rounded-[18px] border px-3 py-3 text-left transition duration-300 ${
+                      selected
+                        ? "border-white/14 bg-black/26 text-white"
+                        : "border-white/8 bg-black/14 text-white/56 hover:text-white/82"
+                    }`}
+                  >
+                    <span className="grid size-10 place-items-center rounded-[16px] border border-white/10 bg-black/18">
+                      <Icon size={18} />
+                    </span>
+                    <span className="text-sm font-medium">{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-dashed border-white/10 bg-black/18 px-4 py-4 text-sm text-white/46">
+            Commands are tokenized without a shell. Plain commands like `npm start`, `docker
+            compose up app`, and direct script paths work well. Shell operators such as pipes or
+            redirection are intentionally out of scope for this first pass.
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <ShinyButton
+              label={managedEditorMode === "create" ? "Create Service" : "Save Changes"}
+              hex={accent.rose}
+              icon={managedEditorMode === "create" ? Plus : PenSquare}
+              onClick={saveManagedDraft}
+              disabled={isPending || runtimeStatus !== "ready"}
+            />
+            {managedEditorMode === "create" ? null : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedManagedService) {
+                    setManagedDraft(createDraftFromManagedProcess(selectedManagedService));
+                  }
+                }}
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/18 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 
   const renderPortsPage = () => (
@@ -1892,7 +2293,6 @@ function App() {
                   <div className="flex flex-col items-end gap-2">
                     <StatusPill tone={processToneMap[process.status]} label={process.status} />
                     {renderProcessOwnershipTag(process)}
-                    {renderProcessManagementButton(process)}
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
@@ -2068,6 +2468,10 @@ function App() {
 
     if (activeView === "processes") {
       return renderProcessesPage();
+    }
+
+    if (activeView === "managed") {
+      return renderManagedPage();
     }
 
     if (activeView === "ports") {

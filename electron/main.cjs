@@ -3,9 +3,10 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const {
   hydrateRuntimeSnapshot,
   performProcessAction,
-  setProcessManagement,
   shutdownManagedServices,
   updateManagedService,
+  createManagedService,
+  removeManagedService,
   applyAutomationRule,
 } = require("./runtime.cjs");
 
@@ -59,11 +60,14 @@ async function bootstrap() {
   ipcMain.handle("mewl:process-action", async (_event, payload) =>
     performProcessAction(payload.action, payload.processId),
   );
-  ipcMain.handle("mewl:set-process-management", async (_event, payload) =>
-    setProcessManagement(payload.processId, payload.managed),
-  );
   ipcMain.handle("mewl:update-managed-service", async (_event, payload) =>
     updateManagedService(payload.processId, payload.updates),
+  );
+  ipcMain.handle("mewl:create-managed-service", async (_event, payload) =>
+    createManagedService(payload.service),
+  );
+  ipcMain.handle("mewl:remove-managed-service", async (_event, payload) =>
+    removeManagedService(payload.processId),
   );
   ipcMain.handle("mewl:apply-automation-rule", async (_event, payload) =>
     applyAutomationRule(payload.ruleId, payload.enabled),

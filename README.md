@@ -6,8 +6,9 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 
 - Search a managed local runtime made up of services, workers, tooling, and data processes
 - Scan the live workspace from a compact top command strip
-- Start, stop, and restart managed services directly from process cards and the full inspector where the service context is visible
-- Promote observed processes into managed services and switch managed services back to observed directly from the UI
+- Browse a cleaner live Processes page that stays focused on what is running right now, with expandable cards and a read-only inspector
+- Use a dedicated Managed workspace to create, edit, color-code, and control user-authored service definitions
+- Start, stop, and restart managed services from compact icon actions on managed cards instead of mixing control buttons into the live process list
 - Collapse helper subprocess noise on the Processes page so Chromium and Electron-based apps surface as one app-level row instead of a pile of zygotes and utility workers
 - Persist workspace state across refreshes, including the active view, filters, sidebar state, selected process, expanded cards, alerts, and automation toggles
 - Use a cleaner overview dashboard with summary cards plus side-by-side process and port previews
@@ -16,9 +17,10 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Inspect per-process stdout and stderr tails from the live managed runtime bridge
 - Load live processes, listening ports, and host telemetry through an Electron preload bridge when running in the desktop shell
 - Start, stop, and restart Mewl-owned services through a config-driven Electron lifecycle bridge
+- Save managed services with explicit start commands, optional stop and restart commands, working directories, notes, colors, and card icons
 - Update managed `autostart` and `watch ports` settings from the UI and persist them back to `mewl.services.json`
 - Boot managed startup profiles and quiet-mode presets through the Electron Automation view
-- Launch managed services through a hardened Electron runner with explicit env inheritance, workspace-bound cwd checks, PATH resolution, and reserved-port guards
+- Launch managed services through a hardened Electron runner with explicit env inheritance, command tokenization, PATH resolution, and reserved-port guards
 - Reattach orphaned managed services that are already running on the host so lifecycle actions can reclaim and control them cleanly
 - Normalize accidental helper-process promotions back to a single managed entry so repeated `Manage` clicks on child processes do not create confusing duplicates in the saved config
 - Review a port registry with exposure, conflict, and watched-binding states
@@ -44,14 +46,15 @@ This is the first real product pass, not the final native implementation yet.
 - Runtime loading flows through [`src/runtime/provider.ts`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/src/runtime/provider.ts), which now requires the Electron host bridge instead of exposing a browser fallback.
 - Lifecycle actions, automation toggles, startup profiles, and managed-service logs now round-trip through the live Electron runtime.
 - Electron is the chosen host integration layer for the native bridge because it keeps the renderer, preload contract, and runtime orchestration in the same TypeScript stack.
-- Managed process launching, live port discovery, and host telemetry now run through the Electron preload bridge, with observed host processes remaining read-only unless Mewl explicitly owns them.
+- Managed process launching, live port discovery, and host telemetry now run through the Electron preload bridge, with the Processes page staying focused on live inspection and the Managed page owning saved service control.
 - Managed-service configuration now lives in a per-user app config file instead of the repo, so packaged Electron builds can keep using the same settings location.
+- Managed services are now explicit saved definitions with a start command plus optional stop and restart commands instead of inferred promotion from the Processes page.
 
 ## Run Locally
 
 ```bash
 npm install
-npm run dev
+npm run dev:desktop
 ```
 
 The dev server now runs on:
@@ -96,10 +99,10 @@ Managed desktop services are stored in a per-user config file:
 - Windows: `%APPDATA%\\mewl\\mewl.services.json`
 
 The repository copy at [`mewl.services.json`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/mewl.services.json) is now an empty baseline instead of a seeded fake-service list.
-Mewl only performs lifecycle control for services listed in the per-user config, while other discovered host processes stay observed until you promote them from the UI.
-Those same managed services now drive the inspector toggles and Electron automation rules, so the UI edits the real desktop config instead of local-only state.
+Mewl only performs lifecycle control for services listed in the per-user config, while other discovered host processes stay read-only on the live Processes page.
+Those same managed services now drive the Managed workspace editor and Electron automation rules, so the UI edits the real desktop config instead of local-only state.
 Profiles in that same file can now boot or quiet grouped services through the Automation page, and enabled startup profiles are applied when the Electron runtime hydrates.
-Managed service launches are now intentionally strict: Mewl resolves a single executable token, keeps service working directories inside the repo, inherits only explicitly listed environment variables, and blocks starts when reserved ports are already occupied.
+Managed service launches are now intentionally strict: Mewl tokenizes plain command strings into executable-plus-args form, inherits only explicitly listed environment variables, and blocks starts when reserved ports are already occupied.
 
 ## Project Structure
 
@@ -141,14 +144,14 @@ Managed service launches are now intentionally strict: Mewl resolves a single ex
 The current product direction is intentionally utility-first rather than dashboard wallpaper:
 
 - collapsible left navigation rail for overview, processes, ports, monitor, and automation
+- a dedicated Managed workspace for user-authored service cards and lifecycle control
 - compact operational header with search, scan, and alert tray instead of hero copy
 - the shared search field now uses the Pink Pixel rose accent for its icon and focus glow
 - clean overview dashboard with summary cards and short preview lists instead of oversized explainer surfaces
-- dedicated Processes page with expandable cards and a full-width inspector
-- process cards now carry their own lifecycle controls instead of depending on distant header buttons
+- dedicated Processes page with expandable cards and a full-width inspector for live process inspection
+- managed cards now carry their own icon-only lifecycle controls so command execution stays attached to saved service definitions
 - process surfaces now label each entry as `managed` or `observed` without extra explanatory filler on observed cards
-- process surfaces now include `Manage` / `Observe` actions so users do not have to hunt down the config file for common cases
-- observed process cards now prefer launchable parent app rows instead of noisy helper children, which keeps `Manage` focused on the process users actually mean
+- observed process cards now prefer launchable parent app rows instead of noisy helper children, which keeps the live process list focused on the app users actually mean
 - collapsed process cards now stay compact, with long command and path details moved into the expanded state
 - dedicated Ports and Monitor pages for deeper operational detail
 - GPU telemetry folded into the host monitor and sidebar health card, with graceful fallback when the host bridge cannot read GPU data
@@ -163,6 +166,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - managed service settings that round-trip between the React UI and `mewl.services.json`
 - startup profiles that can boot or quiet groups of Mewl-owned services through the Electron bridge
 - hardened managed service execution rules so the desktop bridge only launches validated commands with controlled environments
+- the current product step is the first half of the `Observed` / `Managed` split, with `Managed` now owning saved service definitions and the live Processes page staying visually lighter
 - Pink Pixel branding applied without turning the app into a generic purple SaaS grid
 
 ## Brand
@@ -180,6 +184,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - `public/icon.png` is used by the app shell and browser tab.
 - The current implementation is a live Electron-first desktop cockpit with persisted workspace preferences and managed local service control.
 - The browser build now intentionally stops at the desktop-required state instead of presenting a fallback runtime.
-- The desktop shell can now control services registered in `mewl.services.json`; arbitrary discovered host processes are intentionally read-only.
+- The desktop shell can now control services registered in `mewl.services.json`; arbitrary discovered host processes are intentionally read-only from the live Processes page.
 - The live host scan now hides helper subprocesses such as Chromium zygotes and utility workers from the default Processes grid so one app reads like one app.
 - The notifications tray is layered above the dashboard surfaces so alerts stay readable when opened from the top command bar.
+- Managed services can now be authored directly in the app with command fields, notes, color accents, and icon selection, while live process cards stay focused on inspection instead of control.

@@ -1,4 +1,4 @@
-import { type RuntimeSnapshot } from "../data/runtime";
+import { type ManagedServiceDraft, type RuntimeSnapshot } from "../data/runtime";
 
 export type HostLayerChoice = "electron";
 
@@ -26,14 +26,12 @@ export type MewlHostBridge = {
     action: "start" | "stop" | "restart" | "scan",
     processId: string,
   ) => Promise<RuntimeActionResult>;
-  setProcessManagement?: (
-    processId: string,
-    managed: boolean,
-  ) => Promise<RuntimeActionResult>;
   updateManagedService?: (
     processId: string,
-    updates: { autoStart?: boolean; watchPorts?: boolean },
+    updates: Partial<ManagedServiceDraft>,
   ) => Promise<RuntimeActionResult>;
+  createManagedService?: (service: ManagedServiceDraft) => Promise<RuntimeActionResult>;
+  removeManagedService?: (processId: string) => Promise<RuntimeActionResult>;
   applyAutomationRule?: (ruleId: string, enabled: boolean) => Promise<RuntimeActionResult>;
 };
 

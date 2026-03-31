@@ -11,8 +11,10 @@ const oneMegabyte = 1024 * 1024;
 const managedLogTailLimit = 12;
 const automationHistoryLimit = 36;
 const defaultRestartLimit = 3;
+const metricHistoryLimit = 24;
 const repoRoot = process.cwd();
 const managedServiceState = new Map();
+const metricHistoryState = new Map();
 let autoStartInitialized = false;
 const defaultInheritedEnvKeys = ["PATH", "HOME", "LANG", "TERM", "USER", "LOGNAME", "SHELL"];
 const serviceConfigFileName = "mewl.services.json";
@@ -131,6 +133,13 @@ function normalizeRestartLimit(value) {
   }
 
   return clamp(Math.round(value), 1, 10);
+}
+
+function rememberMetricSample(metric) {
+  const current = metricHistoryState.get(metric.id) ?? [];
+  const next = [...current, metric.value].slice(-metricHistoryLimit);
+  metricHistoryState.set(metric.id, next);
+  return next;
 }
 
 function isSafeEnvKey(key) {
@@ -2273,11 +2282,27 @@ async function hydrateRuntimeSnapshot() {
     },
   };
 
+  const monitorHistory = [
+    metrics.cpu,
+    metrics.memory,
+    metrics.disk,
+    metrics.network,
+    metrics.gpu,
+  ].map((metric) => ({
+    id: metric.id,
+    label: metric.label,
+    detail: metric.detail,
+    values: rememberMetricSample(metric),
+    displayValue: metric.displayValue,
+    available: metric.available,
+  }));
+
   return {
     processes: [...managedProcesses, ...discoveredProcesses],
     ports,
     alerts: buildAlerts([...managedProcesses, ...discoveredProcesses], ports, metrics, services, history),
     monitorMetrics: [metrics.cpu, metrics.memory, metrics.disk, metrics.network, metrics.gpu],
+    monitorHistory,
     automationRules: buildAutomationRules(services, profiles),
     automationHistory: history,
   };

@@ -141,6 +141,15 @@ export type MonitorMetric = {
   available?: boolean;
 };
 
+export type MonitorHistorySeries = {
+  id: string;
+  label: string;
+  detail: string;
+  values: number[];
+  displayValue?: string;
+  available?: boolean;
+};
+
 export type AutomationRule = {
   id: string;
   title: string;
@@ -154,6 +163,7 @@ export type RuntimeSnapshot = {
   ports: PortBinding[];
   alerts: AlertRecord[];
   monitorMetrics: MonitorMetric[];
+  monitorHistory: MonitorHistorySeries[];
   automationRules: AutomationRule[];
   automationHistory: AutomationHistoryEntry[];
 };

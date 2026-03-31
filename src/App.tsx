@@ -35,6 +35,7 @@ import {
 import {
   CandyInput,
   HologramProgress,
+  PulseLineChart,
   ShinyButton,
   SignalBars,
   StatusPill,
@@ -52,6 +53,7 @@ import {
   type ManagedServiceIcon,
   type ManagedProcess,
   type ManagedServiceUpdate,
+  type MonitorHistorySeries,
   type MonitorMetric,
   type PortBinding,
   type ProcessLogEntry,
@@ -91,6 +93,7 @@ type PersistedWorkspaceState = {
     alerts: AlertRecord[];
     automationRules: AutomationRule[];
     automationHistory: AutomationHistoryEntry[];
+    monitorHistory: MonitorHistorySeries[];
     commandState: string;
   };
 };
@@ -385,6 +388,9 @@ function readPersistedWorkspace(): PersistedWorkspaceState | null {
       automationHistory: Array.isArray(runtime.automationHistory)
         ? (runtime.automationHistory as AutomationHistoryEntry[])
         : [],
+      monitorHistory: Array.isArray(runtime.monitorHistory)
+        ? (runtime.monitorHistory as MonitorHistorySeries[])
+        : [],
       commandState:
         typeof runtime.commandState === "string" ? runtime.commandState : defaultCommandState,
     },
@@ -422,6 +428,7 @@ function App() {
   const [ports, setPorts] = useState<PortBinding[]>([]);
   const [alerts, setAlerts] = useState<AlertRecord[]>([]);
   const [monitorMetrics, setMonitorMetrics] = useState<MonitorMetric[]>([]);
+  const [monitorHistory, setMonitorHistory] = useState<MonitorHistorySeries[]>([]);
   const [automationRules, setAutomationRules] = useState<AutomationRule[]>([]);
   const [automationHistory, setAutomationHistory] = useState<AutomationHistoryEntry[]>([]);
   const [commandState, setCommandState] = useState(defaultCommandState);
@@ -434,6 +441,7 @@ function App() {
     setPorts(snapshot.ports);
     setAlerts(snapshot.alerts);
     setMonitorMetrics(snapshot.monitorMetrics);
+    setMonitorHistory(snapshot.monitorHistory);
     setAutomationRules(snapshot.automationRules);
     setAutomationHistory(snapshot.automationHistory);
     setSelectedProcessId((current) =>
@@ -473,6 +481,7 @@ function App() {
         const hydratedAlerts = snapshot.alerts;
         const hydratedAutomationRules = snapshot.automationRules;
         const hydratedAutomationHistory = snapshot.automationHistory;
+        const hydratedMonitorHistory = snapshot.monitorHistory;
         const fallbackSelectedProcessId =
           hydratedProcesses[0]?.id ?? snapshot.processes[0]?.id ?? "";
 
@@ -480,6 +489,7 @@ function App() {
         setPorts(hydratedPorts);
         setAlerts(hydratedAlerts);
         setMonitorMetrics(snapshot.monitorMetrics);
+        setMonitorHistory(hydratedMonitorHistory);
         setAutomationRules(hydratedAutomationRules);
         setAutomationHistory(hydratedAutomationHistory);
         setCommandState(persisted?.runtime.commandState ?? defaultCommandState);
@@ -540,6 +550,7 @@ function App() {
         alerts: isLiveElectronRuntime ? [] : alerts,
         automationRules: isLiveElectronRuntime ? [] : automationRules,
         automationHistory: isLiveElectronRuntime ? [] : automationHistory,
+        monitorHistory: isLiveElectronRuntime ? [] : monitorHistory,
         commandState,
       },
     });
@@ -548,6 +559,7 @@ function App() {
     alerts,
     automationRules,
     automationHistory,
+    monitorHistory,
     commandState,
     expandedProcessIds,
     ports,
@@ -575,6 +587,32 @@ function App() {
 
     setSelectedManagedServiceId(processes.find((process) => process.managed)?.id ?? "");
   }, [processes, runtimeStatus, selectedManagedServiceId]);
+
+  useEffect(() => {
+    if (!isLiveElectronRuntime || runtimeStatus !== "ready") {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void hydrateRuntimeSnapshot()
+        .then((snapshot) => {
+          setProcesses(snapshot.processes);
+          setPorts(snapshot.ports);
+          setAlerts(snapshot.alerts);
+          setMonitorMetrics(snapshot.monitorMetrics);
+          setMonitorHistory(snapshot.monitorHistory);
+          setAutomationRules(snapshot.automationRules);
+          setAutomationHistory(snapshot.automationHistory);
+        })
+        .catch(() => {
+          // Keep the current cockpit state when a background refresh misses once.
+        });
+    }, 6000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [isLiveElectronRuntime, runtimeStatus]);
 
   const deferredQuery = useDeferredValue(query);
   const searchValue = deferredQuery.trim().toLowerCase();
@@ -666,6 +704,8 @@ function App() {
   const hostGpuMetric =
     monitorMetrics.find((metric) => metric.id === "gpu") ?? null;
   const hostGpu = hostGpuMetric?.value ?? 0;
+  const monitorTrendCards = monitorHistory.filter((series) => series.id !== "gpu");
+  const gpuTrendSeries = monitorHistory.find((series) => series.id === "gpu") ?? null;
   const busiestProcesses = [...processes]
     .sort((left, right) => right.cpu + right.memory / 20 - (left.cpu + left.memory / 20))
     .slice(0, 4);
@@ -718,6 +758,7 @@ function App() {
     setManagedDraft(createEmptyManagedDraft());
     setManagedPrefillSourceId("");
     setAutomationHistory([]);
+    setMonitorHistory([]);
 
     void hydrateRuntimeSnapshot()
       .then((snapshot) => {
@@ -725,6 +766,7 @@ function App() {
         setPorts(snapshot.ports);
         setAlerts(snapshot.alerts);
         setMonitorMetrics(snapshot.monitorMetrics);
+        setMonitorHistory(snapshot.monitorHistory);
         setAutomationRules(snapshot.automationRules);
         setAutomationHistory(snapshot.automationHistory);
         setCommandState(defaultCommandState);
@@ -2779,49 +2821,118 @@ function App() {
   );
 
   const renderMonitorPage = () => (
-    <section className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.9fr)]">
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.88fr)]">
       <div className={panelClass}>
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-white/42">System Monitor</p>
-            <h3 className="mt-2 text-2xl font-semibold text-white">Host Pressure</h3>
+            <h3 className="mt-2 text-2xl font-semibold text-white">Pressure Tides</h3>
           </div>
           <div className="rounded-full border border-white/10 bg-black/18 px-3 py-1 text-xs uppercase tracking-[0.22em] text-white/58">
             live sample
           </div>
         </div>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-2">
-          {monitorMetrics.length > 0 ? (
-            monitorMetrics.map((metric) => (
-              <div key={metric.id} className={metric.id === "gpu" ? "md:col-span-2" : ""}>
-                <HologramProgress
-                  label={metric.label}
-                  value={metric.value}
-                  valueLabel={metric.displayValue}
-                  detail={metric.detail}
-                  inactive={metric.available === false}
-                  hex={monitorMetricHexMap[metric.id] ?? accent.cyan}
-                />
+        <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(300px,0.9fr)]">
+          {monitorTrendCards.length > 0 ? (
+            <div className="space-y-4">
+              <div className="rounded-[28px] border border-white/8 bg-black/18 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-white/38">
+                      Trend Canvas
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-white">
+                      Rolling host pressure
+                    </p>
+                  </div>
+                  <Gauge size={20} className="text-cyan-300" />
+                </div>
+
+                <div className="mt-5 grid gap-3">
+                  {monitorTrendCards.map((series) => (
+                    <PulseLineChart
+                      key={series.id}
+                      label={series.label}
+                      valueLabel={series.displayValue ?? `${series.values[series.values.length - 1] ?? 0}%`}
+                      detail={series.detail}
+                      values={series.values}
+                      hex={monitorMetricHexMap[series.id] ?? accent.cyan}
+                      inactive={series.available === false}
+                    />
+                  ))}
+                </div>
               </div>
-            ))
+
+              {gpuTrendSeries ? (
+                <PulseLineChart
+                  label={gpuTrendSeries.label}
+                  valueLabel={
+                    gpuTrendSeries.displayValue ??
+                    `${gpuTrendSeries.values[gpuTrendSeries.values.length - 1] ?? 0}%`
+                  }
+                  detail={gpuTrendSeries.detail}
+                  values={gpuTrendSeries.values}
+                  hex={monitorMetricHexMap[gpuTrendSeries.id] ?? accent.rose}
+                  inactive={gpuTrendSeries.available === false}
+                />
+              ) : null}
+            </div>
           ) : (
-            <div className="rounded-[22px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48 md:col-span-2">
+            <div className="rounded-[22px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48 xl:col-span-2">
               Host metrics will appear here once the runtime source delivers a pressure snapshot.
             </div>
           )}
-        </div>
 
-        <div className="mt-5 rounded-[28px] border border-white/8 bg-black/18 p-4">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-white/38">Runtime Pulse</p>
-              <p className="mt-2 text-lg font-semibold text-white">Current service waveform</p>
+          <div className="space-y-4">
+            <div className="rounded-[28px] border border-white/8 bg-[#0f141b]/94 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-white/38">
+                    Snapshot Lane
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-white">
+                    Current host pressure
+                  </p>
+                </div>
+                <div className="rounded-full border border-white/10 bg-black/18 px-3 py-1 text-xs uppercase tracking-[0.22em] text-white/58">
+                  last 24 samples
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-3">
+                {monitorMetrics.length > 0 ? (
+                  monitorMetrics.map((metric) => (
+                    <HologramProgress
+                      key={metric.id}
+                      label={metric.label}
+                      value={metric.value}
+                      valueLabel={metric.displayValue}
+                      detail={metric.detail}
+                      inactive={metric.available === false}
+                      hex={monitorMetricHexMap[metric.id] ?? accent.cyan}
+                    />
+                  ))
+                ) : (
+                  <div className="rounded-[22px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48">
+                    Waiting on the next host pressure snapshot.
+                  </div>
+                )}
+              </div>
             </div>
-            <Gauge size={20} className="text-amber-300" />
-          </div>
-          <div className="mt-4">
-            <SignalBars values={[24, 46, 62, 71, 53, 88, 76, 68, 90, 58]} className="h-24" />
+
+            <div className="rounded-[28px] border border-white/8 bg-black/18 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-white/38">Runtime Pulse</p>
+                  <p className="mt-2 text-lg font-semibold text-white">Current service waveform</p>
+                </div>
+                <Gauge size={20} className="text-amber-300" />
+              </div>
+              <div className="mt-4">
+                <SignalBars values={[24, 46, 62, 71, 53, 88, 76, 68, 90, 58]} className="h-24" />
+              </div>
+            </div>
           </div>
         </div>
       </div>

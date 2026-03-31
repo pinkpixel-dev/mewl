@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 14:58 EDT
+
+- added rolling monitor visuals for CPU, memory, disk, network, and GPU by introducing a live metric-history buffer in the Electron runtime and a new SVG trend-chart component in the shared UI layer
+- reshaped the Monitor page into a stronger composed surface with a trend canvas, snapshot lane, and the existing noisy-service context instead of relying on standalone progress bars alone
+- refreshed the README, overview, and roadmap to document the new monitoring visual system and marked the remaining Phase 4 chart item complete
+- revalidated the app with a successful `npm run build`
+
 ## 2026-03-31 14:54 EDT
 
 - added alert-center filtering in the tray for severity, service, and time window without pushing the workflow into a separate full-page view

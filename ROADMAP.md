@@ -68,7 +68,7 @@
 - [x] Collapse helper subprocesses from the observed grid and dedupe bad helper-derived managed entries so one app no longer appears as several confusing cards
 - [x] Add alerts center filtering by severity, service, and time window
 - [x] Surface process crash loops, orphaned ports, and unhealthy resource spikes
-- [ ] Add richer charts for CPU, memory, network, and disk trends
+- [x] Add richer charts for CPU, memory, network, and disk trends
 - [x] Add automation history for what started, stopped, or failed and why
 - [x] Replace the single mixed Processes workspace with a two-part model: `Observed` for live host processes and `Managed` for services Mewl should control intentionally
 
@@ -140,6 +140,7 @@ This is the main UX split the product now points toward:
 - Older inferred managed config entries now normalize into the explicit command schema on load, and the Managed workspace can surface cleanup reasons plus let users confirm the migrated definition in-app.
 - Managed services can now define restart policies with retry limits, and the Electron bridge records automatic retries plus exits in a persisted automation history feed.
 - The alerts tray can now filter by severity, service, and time window, and the runtime raises richer alerts for crash loops, orphaned reserved ports, and unhealthy managed-service spikes.
+- The Monitor page now renders rolling trend visuals for CPU, memory, disk, network, and GPU using a live sample buffer instead of only one-off pressure bars.
 
 ## Phase 5: Quality and Delivery
 

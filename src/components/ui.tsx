@@ -372,3 +372,106 @@ export function SignalBars({
     </div>
   );
 }
+
+function buildTrendPath(values: number[], width: number, height: number): string {
+  if (values.length === 0) {
+    return "";
+  }
+
+  return values
+    .map((value, index) => {
+      const x = values.length === 1 ? width / 2 : (index / (values.length - 1)) * width;
+      const y = height - (Math.max(0, Math.min(100, value)) / 100) * height;
+      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function buildTrendArea(path: string, width: number, height: number): string {
+  if (!path) {
+    return "";
+  }
+
+  return `${path} L ${width} ${height} L 0 ${height} Z`;
+}
+
+export function PulseLineChart({
+  label,
+  valueLabel,
+  detail,
+  values,
+  hex,
+  inactive = false,
+  compact = false,
+}: {
+  label: string;
+  valueLabel: string;
+  detail?: string;
+  values: number[];
+  hex: string;
+  inactive?: boolean;
+  compact?: boolean;
+}) {
+  const width = 300;
+  const height = compact ? 72 : 132;
+  const paddedValues = values.length > 1 ? values : [...values, ...values];
+  const path = buildTrendPath(paddedValues, width, height);
+  const areaPath = buildTrendArea(path, width, height);
+  const latestValue = paddedValues[paddedValues.length - 1] ?? 0;
+
+  return (
+    <article className="relative overflow-hidden rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+      <div
+        className="pointer-events-none absolute inset-x-6 top-0 h-px"
+        style={{ background: `linear-gradient(90deg, transparent, ${hex}, transparent)` }}
+      />
+      <div className="relative flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">{label}</p>
+          <p className="mt-2 text-xl font-semibold text-white">{valueLabel}</p>
+        </div>
+        <div
+          className="rounded-full border px-3 py-1 text-[0.68rem] uppercase tracking-[0.22em]"
+          style={{
+            color: inactive ? "rgba(255,255,255,0.42)" : hex,
+            borderColor: inactive ? "rgba(255,255,255,0.08)" : `${hex}30`,
+            backgroundColor: inactive ? "rgba(0,0,0,0.18)" : `${hex}12`,
+          }}
+        >
+          {Math.round(latestValue)}%
+        </div>
+      </div>
+
+      <div className={`relative mt-4 overflow-hidden rounded-[20px] border border-white/8 bg-black/24 ${compact ? "h-24" : "h-40"}`}>
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_24%),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(180deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:100%_100%,14.285%_100%,100%_25%] opacity-45" />
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="absolute inset-0 h-full w-full"
+          preserveAspectRatio="none"
+        >
+          {areaPath ? (
+            <path
+              d={areaPath}
+              fill={inactive ? "rgba(255,255,255,0.08)" : `${hex}22`}
+              style={{
+                filter: inactive ? undefined : `drop-shadow(0 0 18px ${hex}44)`,
+              }}
+            />
+          ) : null}
+          {path ? (
+            <path
+              d={path}
+              fill="none"
+              stroke={inactive ? "rgba(255,255,255,0.24)" : hex}
+              strokeWidth={compact ? 2.5 : 3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ) : null}
+        </svg>
+      </div>
+
+      {detail ? <p className="relative mt-3 text-xs leading-5 text-white/44">{detail}</p> : null}
+    </article>
+  );
+}

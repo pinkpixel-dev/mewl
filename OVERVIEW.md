@@ -4,7 +4,7 @@
 
 Mewl is a local process and port management app for Pink Pixel. This pass pushes the project from a visual scaffold into a more functional product shell by restoring workspace state, surfacing structured process logs, and handling runtime loading and failure states more deliberately.
 
-The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, wires real lifecycle control for Mewl-owned services, and now adds restart policies, a persisted automation history feed, and a filterable alerts tray on top of the Managed workspace cleanup flow, observed-to-managed review path, and observed-only kill action.
+The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, wires real lifecycle control for Mewl-owned services, and now adds restart policies, a persisted automation history feed, a filterable alerts tray, and richer rolling monitor visuals on top of the Managed workspace cleanup flow, observed-to-managed review path, and observed-only kill action.
 
 ## Technical Summary
 
@@ -43,6 +43,7 @@ The current implementation includes:
 - a cleaner Automation page that surfaces latest activity and runtime source inline instead of keeping a bulky secondary state column
 - a ports registry table with a wider target column and wrapping behavior for longer bind addresses
 - a monitor view that now includes GPU telemetry when available and suppresses noisy process command text behind expandable detail panels
+- a monitor view that now pairs live pressure bars with rolling SVG trend charts fed by a session-local sample buffer
 - local state transitions that coordinate with the live Electron runtime bridge
 - workspace persistence for the active view, filters, expanded cards, selected process, alerts, and automation state
 - an alerts tray that can now filter the current incident feed by severity, service, and time window
@@ -76,6 +77,7 @@ Holds the shared TypeScript runtime contract used by both the renderer and the E
 - alerts and incident feed entries
 - alert metadata for per-service filtering, time-window filtering, and richer runtime categorization
 - monitor metrics
+- monitor history series for rolling CPU, memory, disk, network, and GPU trend visuals
 - optional GPU telemetry metadata, including availability and display labels for hosts without readable GPU counters
 - automation rules
 - automation history entries for manual actions, runtime boot flows, profiles, policy retries, and failures
@@ -116,6 +118,7 @@ The current implementation:
 - now persists review metadata for legacy-managed entries so the renderer can explain what was normalized and let users mark the cleanup as complete
 - now persists automation history entries and bounded restart-policy settings in the managed config so automation behavior remains explainable across renderer refreshes
 - now derives richer incident alerts from runtime state and automation history, including crash loops, orphaned reserved ports, and managed-service resource spikes
+- now keeps a short in-memory metric history on the Electron side so the renderer can draw trend charts from live samples instead of static snapshots
 - keeps discovered host processes read-only so Mewl does not send lifecycle signals to processes it does not own
 - now exposes a separate observed kill path that can terminate a live pid only when it is not already claimed by a managed service
 
@@ -178,6 +181,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - the monitor page now keeps noisy service command details collapsed until explicitly expanded
 - alert visibility uses local `useState` and conditional rendering for the top-right tray
 - alert filtering uses local state plus runtime-provided metadata so the tray can narrow incidents without leaving the current workspace
+- monitor visuals combine quiet renderer polling with runtime-provided history series so the charts keep moving during an active desktop session
 - the top command bar now owns a higher stacking layer so the alerts tray stays above the dashboard cards
 
 ## Current Limitations

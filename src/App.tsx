@@ -15,11 +15,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
-  Cpu,
   Gauge,
   LayoutDashboard,
-  MemoryStick,
-  Network,
   Play,
   RefreshCw,
   Server,
@@ -53,7 +50,6 @@ import {
   type WorkspaceView,
 } from "./data/runtime";
 import {
-  chosenHostLayer,
   getRuntimeSourceDescriptor,
   hydrateRuntimeSnapshot,
   type RuntimeActionResult,
@@ -88,6 +84,14 @@ const accent = {
   green: "#74f7b0",
   amber: "#fbbf24",
 } as const;
+
+const monitorMetricHexMap: Record<string, string> = {
+  cpu: accent.amber,
+  memory: accent.cyan,
+  disk: accent.green,
+  network: accent.purple,
+  gpu: accent.rose,
+};
 
 const viewMeta: Array<{
   id: WorkspaceView;
@@ -235,6 +239,7 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedProcessId, setSelectedProcessId] = useState("");
   const [expandedProcessIds, setExpandedProcessIds] = useState<string[]>([]);
+  const [expandedResourceDrawIds, setExpandedResourceDrawIds] = useState<string[]>([]);
   const [processes, setProcesses] = useState<ManagedProcess[]>([]);
   const [ports, setPorts] = useState<PortBinding[]>([]);
   const [alerts, setAlerts] = useState<AlertRecord[]>([]);
@@ -436,6 +441,9 @@ function App() {
   const hostMemory = monitorMetrics.find((metric) => metric.id === "memory")?.value ?? 0;
   const hostDisk = monitorMetrics.find((metric) => metric.id === "disk")?.value ?? 0;
   const hostNetwork = monitorMetrics.find((metric) => metric.id === "network")?.value ?? 0;
+  const hostGpuMetric =
+    monitorMetrics.find((metric) => metric.id === "gpu") ?? null;
+  const hostGpu = hostGpuMetric?.value ?? 0;
   const busiestProcesses = [...processes]
     .sort((left, right) => right.cpu + right.memory / 20 - (left.cpu + left.memory / 20))
     .slice(0, 4);
@@ -554,6 +562,14 @@ function App() {
 
   const toggleProcessExpanded = (processId: string) => {
     setExpandedProcessIds((current) =>
+      current.includes(processId)
+        ? current.filter((id) => id !== processId)
+        : [...current, processId],
+    );
+  };
+
+  const toggleResourceDrawExpanded = (processId: string) => {
+    setExpandedResourceDrawIds((current) =>
       current.includes(processId)
         ? current.filter((id) => id !== processId)
         : [...current, processId],
@@ -1673,21 +1689,17 @@ function App() {
 
         <div className="mt-6 grid gap-3 md:grid-cols-2">
           {monitorMetrics.length > 0 ? (
-            monitorMetrics.map((metric, index) => (
-              <HologramProgress
-                key={metric.id}
-                label={metric.label}
-                value={metric.value}
-                hex={
-                  index === 0
-                    ? accent.amber
-                    : index === 1
-                      ? accent.cyan
-                      : index === 2
-                        ? accent.green
-                        : accent.purple
-                }
-              />
+            monitorMetrics.map((metric) => (
+              <div key={metric.id} className={metric.id === "gpu" ? "md:col-span-2" : ""}>
+                <HologramProgress
+                  label={metric.label}
+                  value={metric.value}
+                  valueLabel={metric.displayValue}
+                  detail={metric.detail}
+                  inactive={metric.available === false}
+                  hex={monitorMetricHexMap[metric.id] ?? accent.cyan}
+                />
+              </div>
             ))
           ) : (
             <div className="rounded-[22px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48 md:col-span-2">
@@ -1726,9 +1738,17 @@ function App() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-white/88">{process.name}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.22em] text-white/34">
-                      {process.command}
-                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border border-white/8 bg-black/18 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.2em] text-white/40">
+                        {process.runtime}
+                      </span>
+                      <span className="rounded-full border border-white/8 bg-black/18 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.2em] text-white/40">
+                        {process.group}
+                      </span>
+                      <span className="rounded-full border border-white/8 bg-black/18 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.2em] text-white/40">
+                        {process.uptime}
+                      </span>
+                    </div>
                   </div>
                   <StatusPill tone={processToneMap[process.status]} label={process.status} />
                 </div>
@@ -1746,6 +1766,47 @@ function App() {
                     <p className="mt-2 font-semibold text-white">{process.network} Mbps</p>
                   </div>
                 </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleResourceDrawExpanded(process.id)}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
+                  >
+                    {expandedResourceDrawIds.includes(process.id) ? "Collapse" : "Expand"}
+                    {expandedResourceDrawIds.includes(process.id) ? (
+                      <ChevronUp size={14} />
+                    ) : (
+                      <ChevronDown size={14} />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedProcessId(process.id);
+                      changeView("processes");
+                    }}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
+                  >
+                    Inspect
+                    <ArrowUpRight size={14} />
+                  </button>
+                </div>
+                {expandedResourceDrawIds.includes(process.id) ? (
+                  <div className="mt-4 space-y-3 border-t border-white/8 pt-4">
+                    <p className="text-sm text-white/56">{process.description}</p>
+                    <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-3">
+                      <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">
+                        Command
+                      </p>
+                      <p className="mt-2 break-all font-mono text-sm text-white/78">
+                        {process.command}
+                      </p>
+                      <p className="mt-3 break-all font-mono text-xs text-white/42">
+                        {process.cwd}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
               </article>
             ))
           ) : (
@@ -1759,104 +1820,79 @@ function App() {
   );
 
   const renderAutomationPage = () => (
-    <section className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
-      <div className={panelClass}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-white/42">Automation Rules</p>
-            <h3 className="mt-2 text-2xl font-semibold text-white">Session Guardrails</h3>
-          </div>
-          <div className="grid size-11 place-items-center rounded-[20px] border border-white/10 bg-black/18">
-            <Workflow size={20} className="text-green-300" />
-          </div>
+    <section className={panelClass}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.24em] text-white/42">Automation Rules</p>
+          <h3 className="mt-2 text-2xl font-semibold text-white">Session Guardrails</h3>
         </div>
-
-        <div className="mt-6 space-y-3">
-          {automationRules.length > 0 ? (
-            automationRules.map((rule) => (
-              <div
-                key={rule.id}
-                className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 px-4 py-4"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold text-white/90">{rule.title}</p>
-                    <p className="mt-1 text-sm text-white/54">{rule.detail}</p>
-                    <p className="mt-3 text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-                      {rule.cadence}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => toggleRule(rule.id, !rule.enabled)}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
-                    style={
-                      rule.enabled
-                        ? ({
-                            boxShadow: `0 0 24px ${accent.green}22`,
-                          } satisfies CSSProperties)
-                        : undefined
-                    }
-                  >
-                    <span
-                      className="size-2.5 rounded-full"
-                      style={{
-                        backgroundColor: rule.enabled ? accent.green : "rgba(255,255,255,0.26)",
-                      }}
-                    />
-                    {rule.enabled ? "On" : "Off"}
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="rounded-[24px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48">
-              No automation rules have been provisioned for this workspace yet.
-            </div>
-          )}
+        <div className="grid size-11 place-items-center rounded-[20px] border border-white/10 bg-black/18">
+          <Workflow size={20} className="text-green-300" />
         </div>
       </div>
 
-      <div className={panelClass}>
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-white/42">State</p>
-          <h3 className="mt-2 text-xl font-semibold text-white">Command Queue</h3>
+      <div className="mt-6 grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)]">
+        <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+          <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+            Latest Activity
+          </p>
+          <p className="mt-2 text-sm text-white/62">{commandState}</p>
         </div>
-        <div className="mt-5 rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
-          <p className="text-sm font-medium text-white/84">Latest command state</p>
-          <p className="mt-2 text-sm text-white/54">{commandState}</p>
-        </div>
-        {isLiveElectronRuntime ? (
-          <div className="mt-4 rounded-[24px] border border-white/8 bg-black/18 px-4 py-4">
-            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-              Lifecycle wiring
-            </p>
-            <p className="mt-2 text-sm text-white/54">
-              Live host scanning is active through Electron. Start, stop, and restart now work for
-              services registered in `mewl.services.json`, while discovered host processes remain
-              read-only.
-            </p>
-          </div>
-        ) : null}
-        <div className="mt-4 rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+        <div className="rounded-[24px] border border-white/8 bg-black/18 p-4">
           <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-white/84">Runtime source</p>
-              <p className="mt-2 text-sm text-white/54">{runtimeSource.detail}</p>
-            </div>
+            <p className="text-sm font-medium text-white/84">Runtime Source</p>
             <StatusPill
               tone={runtimeSource.availability === "active" ? "online" : "starting"}
-              label={runtimeSource.badgeLabel}
+              label={runtimeSource.badgeLabel || runtimeSource.label}
             />
           </div>
-          <div className="mt-4 rounded-[20px] border border-white/8 bg-black/18 px-4 py-4">
-            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-              Chosen host layer
-            </p>
-            <p className="mt-2 text-sm font-semibold text-white/88">{chosenHostLayer.label}</p>
-            <p className="mt-2 text-sm text-white/54">{chosenHostLayer.summary}</p>
-          </div>
+          <p className="mt-2 text-sm text-white/54">{runtimeSource.detail}</p>
         </div>
+      </div>
+
+      <div className="mt-6 space-y-3">
+        {automationRules.length > 0 ? (
+          automationRules.map((rule) => (
+            <div
+              key={rule.id}
+              className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 px-4 py-4"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-white/90">{rule.title}</p>
+                  <p className="mt-1 text-sm text-white/54">{rule.detail}</p>
+                  <p className="mt-3 text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                    {rule.cadence}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleRule(rule.id, !rule.enabled)}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
+                  style={
+                    rule.enabled
+                      ? ({
+                          boxShadow: `0 0 24px ${accent.green}22`,
+                        } satisfies CSSProperties)
+                      : undefined
+                  }
+                >
+                  <span
+                    className="size-2.5 rounded-full"
+                    style={{
+                      backgroundColor: rule.enabled ? accent.green : "rgba(255,255,255,0.26)",
+                    }}
+                  />
+                  {rule.enabled ? "On" : "Off"}
+                </button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-[24px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48">
+            No automation rules have been provisioned for this workspace yet.
+          </div>
+        )}
       </div>
     </section>
   );
@@ -2027,12 +2063,22 @@ function App() {
 
             <div className={`mt-4 grid gap-3 ${sidebarCollapsed ? "grid-cols-1" : "grid-cols-2"}`}>
               {[
-                ["CPU", `${hostCpu}%`],
-                ["RAM", `${hostMemory}%`],
-                ["Disk", `${hostDisk}%`],
-                ["Net", `${hostNetwork}%`],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-[20px] border border-white/8 bg-black/18 px-3 py-3 text-sm">
+                ["CPU", `${hostCpu}%`, ""],
+                ["RAM", `${hostMemory}%`, ""],
+                ["Disk", `${hostDisk}%`, ""],
+                ["Net", `${hostNetwork}%`, ""],
+                [
+                  "GPU",
+                  hostGpuMetric?.available === false
+                    ? "Unavailable"
+                    : hostGpuMetric?.displayValue ?? `${hostGpu}%`,
+                  "col-span-2",
+                ],
+              ].map(([label, value, className]) => (
+                <div
+                  key={label}
+                  className={`rounded-[20px] border border-white/8 bg-black/18 px-3 py-3 text-sm ${className}`}
+                >
                   <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">{label}</p>
                   <p className="mt-2 font-semibold text-white">{value}</p>
                 </div>

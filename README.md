@@ -17,7 +17,7 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Boot managed startup profiles and quiet-mode presets through the Electron Automation view
 - Launch managed services through a hardened Electron runner with explicit env inheritance, workspace-bound cwd checks, PATH resolution, and reserved-port guards
 - Review a port registry with exposure, conflict, and watched-binding states
-- Track host CPU, memory, disk, and network pressure from the sidebar and monitor view
+- Track host CPU, memory, disk, network, and GPU pressure from the sidebar and monitor view
 - Recover gracefully with loading, empty, and error states while the workspace runtime hydrates
 - Route runtime hydration through a provider layer that requires the Electron desktop bridge
 - Collapse the sidebar when you want more room for the main workspace
@@ -134,6 +134,9 @@ The current product direction is intentionally utility-first rather than dashboa
 - dedicated Processes page with expandable cards and a full-width inspector
 - collapsed process cards now stay compact, with long command and path details moved into the expanded state
 - dedicated Ports and Monitor pages for deeper operational detail
+- GPU telemetry folded into the host monitor and sidebar health card, with graceful fallback when the host bridge cannot read GPU data
+- a cleaner Automation page that keeps rule editing in one workspace instead of a separate scaffold-like state column
+- expandable monitor-side resource cards so long process command lines stay hidden until requested
 - structured process logs and session memory so the shell feels more like a real local cockpit
 - a runtime source abstraction that boots only when the Electron bridge is available
 - a live Electron host bridge that can scan the current user session for processes, ports, and machine pressure

@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 08:56 EDT
+
+- added GPU telemetry sampling to the Electron runtime, with `nvidia-smi` and DRM sysfs fallbacks plus a clean unavailable state when the host exposes no readable GPU counters
+- surfaced GPU pressure on the Monitor page and in the sidebar Host Health card without crowding the existing layout
+- removed the bulky Automation page state column and folded its useful status into compact inline panels above the rule list
+- rebuilt the Monitor page `Top Resource Draw` cards so long process command text stays collapsed until expanded, fixing the text overflow issue
+- refreshed the README, overview, and roadmap to document the monitoring and automation cleanup
+- revalidated the app with a successful `npm run build`
+
 ## 2026-03-31 08:43 EDT
 
 - tightened the Processes page cards by removing long command text from the collapsed state

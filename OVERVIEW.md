@@ -32,7 +32,9 @@ The current implementation includes:
 - a dedicated Processes page with expandable cards and a full inspector surface
 - a collapsed process-card layout that keeps the grid tidy by moving long command text into the expanded panel
 - view-specific pages for port registry, monitor, and automation workflows
+- a cleaner Automation page that surfaces latest activity and runtime source inline instead of keeping a bulky secondary state column
 - a ports registry table with a wider target column and wrapping behavior for longer bind addresses
+- a monitor view that now includes GPU telemetry when available and suppresses noisy process command text behind expandable detail panels
 - local state transitions that coordinate with the live Electron runtime bridge
 - workspace persistence for the active view, filters, expanded cards, selected process, alerts, and automation state
 - loading, empty, and error states for runtime hydration and filtered views
@@ -64,6 +66,7 @@ Holds the shared TypeScript runtime contract used by both the renderer and the E
 - port registry bindings with exposure and conflict state
 - alerts and incident feed entries
 - monitor metrics
+- optional GPU telemetry metadata, including availability and display labels for hosts without readable GPU counters
 - automation rules
 This file is the current contract surface for the live Electron adapter.
 
@@ -86,6 +89,7 @@ The current implementation:
 - scans the current user's processes with `ps`
 - scans bound TCP and UDP ports with `lsof`, with `ss` as a host-command fallback
 - samples CPU, memory, disk, and network pressure from the local machine
+- samples GPU pressure when the host exposes it through `nvidia-smi` or DRM sysfs counters, and falls back to an unavailable state when it does not
 - maps the live host snapshot into the existing renderer-facing `RuntimeSnapshot` shape
 - loads `mewl.services.json` and manages only the services explicitly registered there
 - starts, stops, and restarts managed services through child-process ownership in the Electron main process
@@ -147,6 +151,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - inspector toggles and lifecycle actions append to stdout/stderr log tails from the live managed runtime
 - button glow behavior follows Sparklebots interaction patterns
 - progress indicators and animated signal bars add motion without crowding the layout
+- the monitor page now keeps noisy service command details collapsed until explicitly expanded
 - alert visibility uses local `useState` and conditional rendering for the top-right tray
 - the top command bar now owns a higher stacking layer so the alerts tray stays above the dashboard cards
 

@@ -57,6 +57,9 @@
 
 - [ ] Add restart policies
 - [x] Add grouped startup profiles and quiet-mode presets
+- [x] Add GPU telemetry to the monitor and sidebar health surfaces with graceful unavailable handling
+- [x] Simplify the Automation page by folding the old state column into lighter inline status panels
+- [x] Make the monitor resource-draw cards expandable so long command text stays out of the default layout
 - [ ] Add alerts center filtering by severity, service, and time window
 - [ ] Surface process crash loops, orphaned ports, and unhealthy resource spikes
 - [ ] Add richer charts for CPU, memory, network, and disk trends

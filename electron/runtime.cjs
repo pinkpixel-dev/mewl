@@ -208,6 +208,139 @@ async function sampleNetworkUsage() {
   };
 }
 
+function formatMegabytes(value) {
+  return `${Math.round(value)} MB`;
+}
+
+async function sampleNvidiaGpuUsage() {
+  try {
+    const output = await runCommand("nvidia-smi", [
+      "--query-gpu=utilization.gpu,memory.used,memory.total,name",
+      "--format=csv,noheader,nounits",
+    ]);
+    const candidates = output
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.split(",").map((part) => part.trim());
+        if (parts.length < 4) {
+          return null;
+        }
+
+        const [utilization, memoryUsed, memoryTotal, ...nameParts] = parts;
+        const percent = clamp(Number.parseInt(utilization, 10) || 0, 0, 100);
+        const usedMb = Number.parseInt(memoryUsed, 10) || 0;
+        const totalMb = Number.parseInt(memoryTotal, 10) || 0;
+        const name = nameParts.join(", ") || "NVIDIA GPU";
+
+        return {
+          percent,
+          detail:
+            totalMb > 0
+              ? `${name} using ${formatMegabytes(usedMb)} of ${formatMegabytes(totalMb)} VRAM.`
+              : `${name} is reporting a live utilization sample.`,
+        };
+      })
+      .filter(Boolean);
+
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    return candidates.sort((left, right) => right.percent - left.percent)[0];
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function sampleSysfsGpuUsage() {
+  try {
+    const drmEntries = await fs.readdir("/sys/class/drm");
+    const candidates = await Promise.all(
+      drmEntries
+        .filter((entry) => /^card\d+$/.test(entry))
+        .map(async (entry) => {
+          const busyPath = path.join("/sys/class/drm", entry, "device", "gpu_busy_percent");
+          if (!(await pathExists(busyPath))) {
+            return null;
+          }
+
+          const busyPercent = clamp(
+            Number.parseInt((await fs.readFile(busyPath, "utf8")).trim(), 10) || 0,
+            0,
+            100,
+          );
+          const usedVramPath = path.join(
+            "/sys/class/drm",
+            entry,
+            "device",
+            "mem_info_vram_used",
+          );
+          const totalVramPath = path.join(
+            "/sys/class/drm",
+            entry,
+            "device",
+            "mem_info_vram_total",
+          );
+
+          let detail = `${entry.toUpperCase()} busy sample from the DRM host telemetry.`;
+
+          if ((await pathExists(usedVramPath)) && (await pathExists(totalVramPath))) {
+            const [usedBytes, totalBytes] = await Promise.all([
+              fs.readFile(usedVramPath, "utf8"),
+              fs.readFile(totalVramPath, "utf8"),
+            ]);
+            const usedMb = Number.parseInt(usedBytes.trim(), 10) / oneMegabyte;
+            const totalMb = Number.parseInt(totalBytes.trim(), 10) / oneMegabyte;
+
+            if (Number.isFinite(usedMb) && Number.isFinite(totalMb) && totalMb > 0) {
+              detail = `${entry.toUpperCase()} using ${formatMegabytes(usedMb)} of ${formatMegabytes(totalMb)} VRAM.`;
+            }
+          }
+
+          return {
+            percent: busyPercent,
+            detail,
+          };
+        }),
+    );
+
+    const liveSamples = candidates.filter(Boolean);
+    if (liveSamples.length === 0) {
+      return null;
+    }
+
+    return liveSamples.sort((left, right) => right.percent - left.percent)[0];
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function sampleGpuUsage() {
+  const nvidiaSample = await sampleNvidiaGpuUsage();
+  if (nvidiaSample) {
+    return {
+      available: true,
+      ...nvidiaSample,
+    };
+  }
+
+  const sysfsSample = await sampleSysfsGpuUsage();
+  if (sysfsSample) {
+    return {
+      available: true,
+      ...sysfsSample,
+    };
+  }
+
+  return {
+    available: false,
+    percent: 0,
+    detail: "GPU telemetry is unavailable on this host bridge right now.",
+  };
+}
+
 async function readDiskUsage() {
   const output = await runCommand("df", ["-kP", "/"]);
   const lines = output.split("\n").filter(Boolean);
@@ -893,6 +1026,16 @@ function buildAlerts(processes, ports, metrics, services) {
     });
   }
 
+  if (metrics.gpu.available !== false && metrics.gpu.value >= 85) {
+    alerts.push({
+      id: "live-alert-gpu",
+      title: "GPU load is elevated",
+      detail: `Host GPU load is currently ${metrics.gpu.displayValue ?? `${metrics.gpu.value}%`}.`,
+      severity: "warning",
+      stamp: "now",
+    });
+  }
+
   if (stoppedManaged.length > 0) {
     alerts.push({
       id: "live-alert-managed",
@@ -919,11 +1062,12 @@ function buildAlerts(processes, ports, metrics, services) {
 async function hydrateRuntimeSnapshot() {
   await initializeManagedServices();
 
-  const [cpuPercent, networkUsage, diskPercent, rawProcesses, rawBindings, config] =
+  const [cpuPercent, networkUsage, diskPercent, gpuUsage, rawProcesses, rawBindings, config] =
     await Promise.all([
       sampleCpuUsage(),
       sampleNetworkUsage(),
       readDiskUsage(),
+      sampleGpuUsage(),
       readUserProcesses(),
       readPortBindings(),
       loadManagedConfig(),
@@ -1111,13 +1255,21 @@ async function hydrateRuntimeSnapshot() {
       value: networkUsage.percent,
       detail: `Observed ${formatThroughput(networkUsage.bytesPerSecond)} across active interfaces.`,
     },
+    gpu: {
+      id: "gpu",
+      label: "GPU Load",
+      value: gpuUsage.percent,
+      detail: gpuUsage.detail,
+      displayValue: gpuUsage.available ? `${gpuUsage.percent}%` : "Unavailable",
+      available: gpuUsage.available,
+    },
   };
 
   return {
     processes: [...managedProcesses, ...discoveredProcesses],
     ports,
     alerts: buildAlerts([...managedProcesses, ...discoveredProcesses], ports, metrics, services),
-    monitorMetrics: [metrics.cpu, metrics.memory, metrics.disk, metrics.network],
+    monitorMetrics: [metrics.cpu, metrics.memory, metrics.disk, metrics.network, metrics.gpu],
     automationRules: buildAutomationRules(services, profiles),
   };
 }

@@ -293,17 +293,23 @@ export function HologramProgress({
   label,
   value,
   hex,
+  valueLabel,
+  detail,
+  inactive = false,
 }: {
   label: string;
   value: number;
   hex: string;
+  valueLabel?: string;
+  detail?: string;
+  inactive?: boolean;
 }) {
   return (
     <div className="space-y-3 rounded-[22px] border border-white/8 bg-[#0f141b]/94 p-4">
       <div className="flex items-center justify-between gap-4">
         <span className="text-sm font-medium text-white/85">{label}</span>
         <span className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: hex }}>
-          {value}%
+          {valueLabel ?? `${value}%`}
         </span>
       </div>
       <div className="relative h-3 overflow-hidden rounded-full border border-white/8 bg-black/40">
@@ -312,8 +318,10 @@ export function HologramProgress({
           style={
             {
               width: `${value}%`,
-              background: `linear-gradient(90deg, ${hex}, color-mix(in srgb, ${hex} 35%, white))`,
-              boxShadow: `0 0 28px ${hex}88`,
+              background: inactive
+                ? "linear-gradient(90deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06))"
+                : `linear-gradient(90deg, ${hex}, color-mix(in srgb, ${hex} 35%, white))`,
+              boxShadow: inactive ? "none" : `0 0 28px ${hex}88`,
             } satisfies CSSProperties
           }
         />
@@ -324,11 +332,12 @@ export function HologramProgress({
               width: `${value}%`,
               background:
                 "repeating-linear-gradient(-45deg, rgba(255,255,255,0.26) 0 8px, rgba(255,255,255,0.04) 8px 16px)",
-              animation: "hologram-stripe 1.5s linear infinite",
+              animation: inactive ? "none" : "hologram-stripe 1.5s linear infinite",
             } satisfies CSSProperties
           }
         />
       </div>
+      {detail ? <p className="text-xs leading-5 text-white/44">{detail}</p> : null}
     </div>
   );
 }

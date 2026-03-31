@@ -69,6 +69,8 @@ export type MonitorMetric = {
   label: string;
   value: number;
   detail: string;
+  displayValue?: string;
+  available?: boolean;
 };
 
 export type AutomationRule = {

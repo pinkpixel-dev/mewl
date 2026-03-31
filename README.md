@@ -8,6 +8,7 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Scan the live workspace from a compact top command strip
 - Start, stop, and restart managed services directly from process cards and the full inspector where the service context is visible
 - Promote observed processes into managed services and switch managed services back to observed directly from the UI
+- Collapse helper subprocess noise on the Processes page so Chromium and Electron-based apps surface as one app-level row instead of a pile of zygotes and utility workers
 - Persist workspace state across refreshes, including the active view, filters, sidebar state, selected process, expanded cards, alerts, and automation toggles
 - Use a cleaner overview dashboard with summary cards plus side-by-side process and port previews
 - Jump from dashboard previews into dedicated Processes and Ports pages with `See all` actions
@@ -19,6 +20,7 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Boot managed startup profiles and quiet-mode presets through the Electron Automation view
 - Launch managed services through a hardened Electron runner with explicit env inheritance, workspace-bound cwd checks, PATH resolution, and reserved-port guards
 - Reattach orphaned managed services that are already running on the host so lifecycle actions can reclaim and control them cleanly
+- Normalize accidental helper-process promotions back to a single managed entry so repeated `Manage` clicks on child processes do not create confusing duplicates in the saved config
 - Review a port registry with exposure, conflict, and watched-binding states
 - Track host CPU, memory, disk, network, and GPU pressure from the sidebar and monitor view
 - Recover gracefully with loading, empty, and error states while the workspace runtime hydrates
@@ -146,6 +148,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - process cards now carry their own lifecycle controls instead of depending on distant header buttons
 - process surfaces now label each entry as `managed` or `observed` without extra explanatory filler on observed cards
 - process surfaces now include `Manage` / `Observe` actions so users do not have to hunt down the config file for common cases
+- observed process cards now prefer launchable parent app rows instead of noisy helper children, which keeps `Manage` focused on the process users actually mean
 - collapsed process cards now stay compact, with long command and path details moved into the expanded state
 - dedicated Ports and Monitor pages for deeper operational detail
 - GPU telemetry folded into the host monitor and sidebar health card, with graceful fallback when the host bridge cannot read GPU data
@@ -178,4 +181,5 @@ The current product direction is intentionally utility-first rather than dashboa
 - The current implementation is a live Electron-first desktop cockpit with persisted workspace preferences and managed local service control.
 - The browser build now intentionally stops at the desktop-required state instead of presenting a fallback runtime.
 - The desktop shell can now control services registered in `mewl.services.json`; arbitrary discovered host processes are intentionally read-only.
+- The live host scan now hides helper subprocesses such as Chromium zygotes and utility workers from the default Processes grid so one app reads like one app.
 - The notifications tray is layered above the dashboard surfaces so alerts stay readable when opened from the top command bar.

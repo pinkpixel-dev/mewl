@@ -579,6 +579,84 @@ function createManagedServiceName(processRow) {
   return basename || processRow.command || `pid-${processRow.pid}`;
 }
 
+function getProcessExecutable(processRow) {
+  const commandLine = typeof processRow.args === "string" ? processRow.args.trim() : "";
+  if (!commandLine) {
+    return processRow.command || "";
+  }
+
+  const [firstToken] = commandLine.split(/\s+/);
+  return firstToken || processRow.command || "";
+}
+
+function getProcessFamilyName(processRow) {
+  return path.basename(getProcessExecutable(processRow) || processRow.command || "").toLowerCase();
+}
+
+function isHelperProcessRow(processRow) {
+  const commandName = path.basename(processRow.command || "").toLowerCase();
+  const commandLine = typeof processRow.args === "string" ? processRow.args : "";
+
+  return (
+    commandName.includes("crashpad") ||
+    commandLine.includes(" --type=") ||
+    commandLine.startsWith("/proc/self/exe --type=")
+  );
+}
+
+function isHelperManagedService(service) {
+  const commandName = path.basename(service.command || "").toLowerCase();
+  return (
+    commandName.includes("crashpad") ||
+    service.command === "/proc/self/exe" ||
+    service.args.some((arg) => typeof arg === "string" && arg.startsWith("--type="))
+  );
+}
+
+function sanitizeManagedService(service) {
+  if (!isHelperManagedService(service)) {
+    return service;
+  }
+
+  return {
+    ...service,
+    args: [],
+  };
+}
+
+function getManagedServiceDedupKey(service) {
+  return [
+    service.name.trim().toLowerCase(),
+    resolveServiceCwd(service.cwd),
+    service.command,
+    ...(service.args ?? []),
+  ].join("\u0000");
+}
+
+function findPromotableProcess(processRow, processByPid) {
+  const familyName = getProcessFamilyName(processRow);
+  let current = processRow;
+  let promotable = isHelperProcessRow(processRow) ? null : processRow;
+  const visited = new Set();
+
+  while (current && !visited.has(current.pid)) {
+    visited.add(current.pid);
+    const parent = processByPid.get(current.ppid);
+
+    if (!parent || getProcessFamilyName(parent) !== familyName) {
+      break;
+    }
+
+    if (!isHelperProcessRow(parent)) {
+      promotable = parent;
+    }
+
+    current = parent;
+  }
+
+  return promotable;
+}
+
 function parsePortFromTarget(target) {
   const match = target.match(/:(\d+)(?:\s+\(LISTEN\))?$/);
   return match ? Number(match[1]) : null;
@@ -670,11 +748,17 @@ async function loadManagedConfig() {
     const parsed = JSON.parse(raw);
     const services = Array.isArray(parsed.services) ? parsed.services : [];
     const profiles = Array.isArray(parsed.profiles) ? parsed.profiles : [];
+    const normalizedServices = [];
+    const seenServiceKeys = new Set();
+    let configChanged = false;
 
-    return {
-      services: services
-        .filter((service) => typeof service.id === "string" && typeof service.command === "string")
-        .map((service) => ({
+    for (const service of services.filter(
+      (item) => typeof item.id === "string" && typeof item.command === "string",
+    )) {
+      const originalArgs = Array.isArray(service.args)
+        ? service.args.filter((value) => typeof value === "string")
+        : [];
+      const normalizedService = sanitizeManagedService({
         id: service.id,
         name: typeof service.name === "string" ? service.name : service.id,
         description:
@@ -682,9 +766,7 @@ async function loadManagedConfig() {
             ? service.description
             : "Managed command registered for the Mewl desktop bridge.",
         command: service.command,
-        args: Array.isArray(service.args)
-          ? service.args.filter((value) => typeof value === "string")
-          : [],
+        args: originalArgs,
         cwd: typeof service.cwd === "string" ? service.cwd : ".",
         runtime: typeof service.runtime === "string" ? service.runtime : "",
         group: typeof service.group === "string" ? service.group : "managed",
@@ -706,23 +788,60 @@ async function loadManagedConfig() {
                 ),
               )
             : {},
-        })),
-      profiles: profiles
-        .filter((profile) => typeof profile.id === "string")
-        .map((profile) => ({
-          id: profile.id,
-          title: typeof profile.title === "string" ? profile.title : profile.id,
-          detail:
-            typeof profile.detail === "string"
-              ? profile.detail
-              : "Managed startup profile for the Electron runtime bridge.",
-          cadence: typeof profile.cadence === "string" ? profile.cadence : "manual profile",
-          enabled: profile.enabled === true,
-          action: profile.action === "stop" ? "stop" : "start",
-          serviceIds: Array.isArray(profile.serviceIds)
-            ? profile.serviceIds.filter((value) => typeof value === "string")
-            : [],
-        })),
+      });
+
+      const dedupKey = getManagedServiceDedupKey(normalizedService);
+      if (seenServiceKeys.has(dedupKey)) {
+        configChanged = true;
+        continue;
+      }
+
+      seenServiceKeys.add(dedupKey);
+      normalizedServices.push(normalizedService);
+
+      if (normalizedService.args.length !== originalArgs.length) {
+        configChanged = true;
+      }
+    }
+
+    const normalizedProfiles = profiles
+      .filter((profile) => typeof profile.id === "string")
+      .map((profile) => ({
+        id: profile.id,
+        title: typeof profile.title === "string" ? profile.title : profile.id,
+        detail:
+          typeof profile.detail === "string"
+            ? profile.detail
+            : "Managed startup profile for the Electron runtime bridge.",
+        cadence: typeof profile.cadence === "string" ? profile.cadence : "manual profile",
+        enabled: profile.enabled === true,
+        action: profile.action === "stop" ? "stop" : "start",
+        serviceIds: Array.isArray(profile.serviceIds)
+          ? profile.serviceIds.filter((value) => typeof value === "string")
+          : [],
+      }))
+      .map((profile) => ({
+        ...profile,
+        serviceIds: profile.serviceIds.filter((serviceId) =>
+          normalizedServices.some((service) => service.id === serviceId),
+        ),
+      }))
+      .filter((profile) => profile.serviceIds.length > 0);
+
+    if (normalizedProfiles.length !== profiles.length) {
+      configChanged = true;
+    }
+
+    if (configChanged) {
+      await saveManagedConfig({
+        services: normalizedServices,
+        profiles: normalizedProfiles,
+      });
+    }
+
+    return {
+      services: normalizedServices,
+      profiles: normalizedProfiles,
     };
   } catch (error) {
     if (error && typeof error === "object" && error.code === "ENOENT") {
@@ -1321,7 +1440,12 @@ async function hydrateRuntimeSnapshot() {
   ]);
 
   const discoveredProcesses = rawProcesses
-    .filter((processRow) => selectedPids.has(processRow.pid) && !managedPids.has(processRow.pid))
+    .filter(
+      (processRow) =>
+        selectedPids.has(processRow.pid) &&
+        !managedPids.has(processRow.pid) &&
+        !isHelperProcessRow(processRow),
+    )
     .sort((left, right) => right.cpu + right.memoryMb / 25 - (left.cpu + left.memoryMb / 25))
     .map((processRow) => {
       const runtime = normalizeRuntime(processRow.command, processRow.args);
@@ -1540,6 +1664,15 @@ async function setProcessManagement(processId, managed) {
       throw new Error("The selected observed process is no longer running.");
     }
 
+    const processByPid = new Map(rawProcesses.map((item) => [item.pid, item]));
+    const promotableProcess = findPromotableProcess(processRow, processByPid);
+
+    if (!promotableProcess) {
+      throw new Error(
+        "Select the main app row instead of an internal helper process. Mewl can only manage the launchable parent.",
+      );
+    }
+
     const portMap = new Map();
     for (const binding of rawBindings) {
       const list = portMap.get(binding.pid) ?? [];
@@ -1547,14 +1680,34 @@ async function setProcessManagement(processId, managed) {
       portMap.set(binding.pid, list);
     }
 
-    const executable = argv[0] ?? processRow.command;
-    const args = argv.length > 1 ? argv.slice(1) : [];
-    const runtime = normalizeRuntime(processRow.command, processRow.args);
-    const cwd = processRow.cwd || os.homedir();
+    const promotableArgv =
+      promotableProcess.pid === pid ? argv : await readProcessCommandLine(promotableProcess.pid);
+    const executable = promotableArgv[0] ?? getProcessExecutable(promotableProcess);
+    const args = promotableArgv.length > 1 ? promotableArgv.slice(1) : [];
+    const runtime = normalizeRuntime(promotableProcess.command, promotableProcess.args);
+    const cwd = promotableProcess.cwd || os.homedir();
     const ports = Array.from(
-      new Set((portMap.get(processRow.pid) ?? []).map((binding) => binding.port)),
+      new Set((portMap.get(promotableProcess.pid) ?? []).map((binding) => binding.port)),
     ).sort((left, right) => left - right);
-    const name = createManagedServiceName(processRow);
+    const name = createManagedServiceName(promotableProcess);
+    const existingService = config.services.find(
+      (service) =>
+        getManagedServiceDedupKey(service) ===
+        getManagedServiceDedupKey({
+          name,
+          cwd,
+          command: executable,
+          args,
+        }),
+    );
+
+    if (existingService) {
+      return {
+        snapshot: await hydrateRuntimeSnapshot(),
+        message: `${existingService.name} is already managed by Mewl.`,
+      };
+    }
+
     const nextService = {
       id: createManagedServiceId(name, config.services),
       name,

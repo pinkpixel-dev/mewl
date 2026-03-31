@@ -99,9 +99,12 @@ The current implementation:
 - starts, stops, and restarts managed services through child-process ownership in the Electron main process
 - reattaches matching managed services that are already running on the host so stop and restart still work after Mewl reconnects
 - can promote observed host processes into managed services and demote managed services back to observed by updating the saved config through the preload bridge
+- now filters helper subprocesses such as Chromium and Electron `--type=...` workers out of the discovered-process grid so the renderer shows app-level rows instead of every child process
+- promotes helper-child clicks back to the launchable parent process before saving a managed service, which prevents duplicate or non-controllable entries from piling up in config
 - persists managed `autoStart` and `watchPorts` changes back into `mewl.services.json` through the preload bridge
 - applies enabled startup profiles on Electron boot and lets the Automation view trigger grouped start/stop presets
 - validates managed commands before spawn by requiring a single executable token, a workspace-safe cwd, an explicit inherited environment, and available reserved ports
+- normalizes helper-generated managed entries on config load so stale duplicate records collapse back into a single service definition
 - keeps discovered host processes read-only so Mewl does not send lifecycle signals to processes it does not own
 
 ### `electron/main.cjs`
@@ -165,6 +168,7 @@ This structure keeps the app close to the original mockup mood while making the 
 
 - Electron is the required runtime host, and lifecycle plus managed settings currently cover only services and startup profiles registered in `mewl.services.json`
 - config persistence now assumes a per-user desktop install path rather than a repo-local JSON file
+- promoting an already-running desktop app still cannot guarantee a stable future launch command when that app was started from an ephemeral mount path or wrapper script, so a dedicated manual-management workspace is still the cleaner long-term model
 - no auth, multi-user roles, or workspace sync
 - no testing suite yet
 - no packaging for desktop delivery yet
@@ -174,6 +178,7 @@ This structure keeps the app close to the original mockup mood while making the 
 
 - keep expanding the Electron-backed adapter exposed through the runtime provider
 - expand lifecycle control beyond the starter managed-service config and add richer service definitions, environment handling, and exit diagnostics
+- split observed runtime inspection from a dedicated managed-services editor so users can define explicit launch and stop commands instead of relying only on inferred process metadata
 - add live port discovery and collision detection from the host machine
 - persist workspace profiles, startup groups, and automation presets beyond the single local session model
 - add richer charts, searchable logs, streaming tails, and deeper process detail panes

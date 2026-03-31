@@ -64,10 +64,12 @@
 - [x] Move lifecycle actions off the shared header and onto process surfaces so service controls stay in context
 - [x] Replace observed-process warning copy with simple managed/observed ownership tags
 - [x] Move managed-service config to a per-user app-data location and add UI actions to promote or demote processes
+- [x] Collapse helper subprocesses from the observed grid and dedupe bad helper-derived managed entries so one app no longer appears as several confusing cards
 - [ ] Add alerts center filtering by severity, service, and time window
 - [ ] Surface process crash loops, orphaned ports, and unhealthy resource spikes
 - [ ] Add richer charts for CPU, memory, network, and disk trends
 - [ ] Add automation history for what started, stopped, or failed and why
+- [ ] Split the runtime into separate Observed and Managed workspaces so users can define explicit launch and stop commands instead of relying only on inferred process metadata
 
 ## Phase 5: Quality and Delivery
 

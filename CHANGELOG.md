@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 10:40 EDT
+
+- fixed the Processes view so helper subprocesses like Chromium and Electron `--type=...` workers no longer flood the grid as separate app cards
+- hardened `Manage` promotion by walking helper-child selections back to the launchable parent process before saving a managed service
+- normalized helper-derived managed-service entries on config load so repeated accidental `Manage` clicks collapse back into one saved service instead of multiple broken duplicates
+- refreshed the README, overview, and roadmap to document the cleaner observed-process model and the planned split between observed and manually managed workspaces
+- revalidated the app with a successful `npm run build` and a direct Electron runtime hydration check against the live host snapshot
+
 ## 2026-03-31 09:31 EDT
 
 - added a UI-backed `Manage` / `Observe` flow so processes can be promoted into or removed from managed service control without hand-editing JSON

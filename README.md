@@ -10,7 +10,7 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Use a cleaner overview dashboard with summary cards plus side-by-side process and port previews
 - Jump from dashboard previews into dedicated Processes and Ports pages with `See all` actions
 - Browse the Processes page as expandable three-column cards with the full inspector shown below
-- Inspect per-process stdout and stderr tails from the mock runtime contract
+- Inspect per-process stdout and stderr tails from the live managed runtime bridge
 - Load live processes, listening ports, and host telemetry through an Electron preload bridge when running in the desktop shell
 - Start, stop, and restart Mewl-owned services through a config-driven Electron lifecycle bridge
 - Update managed `autostart` and `watch ports` settings from the UI and persist them back to `mewl.services.json`
@@ -19,7 +19,7 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Review a port registry with exposure, conflict, and watched-binding states
 - Track host CPU, memory, disk, and network pressure from the sidebar and monitor view
 - Recover gracefully with loading, empty, and error states while the workspace runtime hydrates
-- Route runtime hydration through a provider layer that can fall back to mock data or swap to a native host bridge
+- Route runtime hydration through a provider layer that requires the Electron desktop bridge
 - Collapse the sidebar when you want more room for the main workspace
 - Use a dedicated Vite dev port at `29463` instead of the default `5173`
 
@@ -35,11 +35,11 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 
 This is the first real product pass, not the final native implementation yet.
 
-- The UI now hydrates from a mock front-end runtime model in [`src/data/runtime.ts`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/src/data/runtime.ts) and restores saved workspace state from local storage.
-- Runtime loading now flows through [`src/runtime/provider.ts`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/src/runtime/provider.ts), which keeps the current mock contract in place while preparing for a native host bridge.
-- Lifecycle actions update the mock process model, alerts feed, and structured log tails, so the cockpit behaves more like a real app even before a native bridge exists.
+- The UI now hydrates only through the live Electron desktop bridge and restores saved workspace preferences from local storage.
+- Runtime loading flows through [`src/runtime/provider.ts`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/src/runtime/provider.ts), which now requires the Electron host bridge instead of exposing a browser fallback.
+- Lifecycle actions, automation toggles, startup profiles, and managed-service logs now round-trip through the live Electron runtime.
 - Electron is the chosen host integration layer for the native bridge because it keeps the renderer, preload contract, and runtime orchestration in the same TypeScript stack.
-- Real OS process launching, killing, port discovery, and machine telemetry still need to be implemented behind the Electron preload bridge.
+- Managed process launching, live port discovery, and host telemetry now run through the Electron preload bridge, with observed host processes remaining read-only unless Mewl explicitly owns them.
 
 ## Run Locally
 
@@ -122,7 +122,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - dedicated Processes page with expandable cards and a full-width inspector
 - dedicated Ports and Monitor pages for deeper operational detail
 - structured process logs and session memory so the shell feels more like a real local cockpit
-- a runtime source abstraction that keeps the mock snapshot and a future Electron bridge behind the same UI-facing contract
+- a runtime source abstraction that boots only when the Electron bridge is available
 - a live Electron host bridge that can scan the current user session for processes, ports, and machine pressure
 - config-driven managed services so desktop lifecycle actions only touch processes Mewl explicitly owns
 - managed service settings that round-trip between the React UI and `mewl.services.json`
@@ -143,9 +143,7 @@ The current product direction is intentionally utility-first rather than dashboa
 
 - `mockup.png` remains the visual reference image in the repository.
 - `public/icon.png` is used by the app shell and browser tab.
-- The current implementation is a polished local-ops foundation with mock runtime data, persisted workspace state, and no native system bridge yet.
-- Electron is now the documented native-host target, but the repo still ships as a web build until the preload and main-process bridge lands.
-- The desktop shell now has a first live Electron bridge for runtime hydration, but lifecycle control is still being wired one step at a time.
+- The current implementation is a live Electron-first desktop cockpit with persisted workspace preferences and managed local service control.
+- The browser build now intentionally stops at the desktop-required state instead of presenting a fallback runtime.
 - The desktop shell can now control services registered in `mewl.services.json`; arbitrary discovered host processes are intentionally read-only.
-- The remaining browser-side mock path is temporary; the long-term goal is a fully live desktop runtime with no mock fallback.
 - The notifications tray is layered above the dashboard surfaces so alerts stay readable when opened from the top command bar.

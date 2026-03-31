@@ -1,12 +1,8 @@
-import {
-  createInitialRuntimeSnapshot,
-  hydrateMockRuntime,
-  type RuntimeSnapshot,
-} from "../data/runtime";
+import { type RuntimeSnapshot } from "../data/runtime";
 
 export type HostLayerChoice = "electron";
 
-export type RuntimeSourceId = "mock" | "electron";
+export type RuntimeSourceId = "desktop-required" | "electron";
 
 export type RuntimeCapability =
   | "process-control"
@@ -20,13 +16,12 @@ export type RuntimeSourceDescriptor = {
   badgeLabel: string;
   detail: string;
   hostLayer: HostLayerChoice;
-  availability: "active" | "fallback";
+  availability: "active" | "unavailable";
   capabilities: RuntimeCapability[];
 };
 
 export type MewlHostBridge = {
   hydrateRuntimeSnapshot: () => Promise<RuntimeSnapshot>;
-  createDefaultRuntimeSnapshot?: () => Promise<RuntimeSnapshot>;
   performProcessAction?: (
     action: "start" | "stop" | "restart" | "scan",
     processId: string,
@@ -56,7 +51,7 @@ export const chosenHostLayer = {
   implementationNotes: [
     "Run process control, port discovery, and machine telemetry in the Electron main process.",
     "Expose a narrow preload API to the renderer instead of leaking Node primitives into the UI.",
-    "Keep the renderer contract aligned with RuntimeSnapshot so the existing mock-first UI can swap sources without large component changes.",
+    "Keep the renderer contract aligned with RuntimeSnapshot so the UI only boots when the Electron bridge is available.",
   ],
 };
 
@@ -94,13 +89,13 @@ export function getRuntimeSourceDescriptor(): RuntimeSourceDescriptor {
   }
 
   return {
-    id: "mock",
-    label: "Mock runtime",
-    badgeLabel: "mock fallback",
+    id: "desktop-required",
+    label: "Desktop bridge required",
+    badgeLabel: "desktop required",
     detail:
-      "The renderer is running against the temporary mock contract outside the Electron desktop shell.",
+      "Mewl now requires the Electron desktop bridge and does not expose a browser-only runtime fallback.",
     hostLayer: chosenHostLayer.id,
-    availability: "fallback",
+    availability: "unavailable",
     capabilities: [],
   };
 }
@@ -112,15 +107,7 @@ export async function hydrateRuntimeSnapshot(): Promise<RuntimeSnapshot> {
     return bridge.hydrateRuntimeSnapshot();
   }
 
-  return hydrateMockRuntime();
-}
-
-export async function createDefaultRuntimeSnapshot(): Promise<RuntimeSnapshot> {
-  const bridge = getHostBridge();
-
-  if (bridge?.createDefaultRuntimeSnapshot) {
-    return bridge.createDefaultRuntimeSnapshot();
-  }
-
-  return createInitialRuntimeSnapshot();
+  throw new Error(
+    "Mewl requires the Electron desktop bridge. Launch the app with npm run dev:desktop or npm run desktop.",
+  );
 }

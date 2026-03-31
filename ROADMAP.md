@@ -31,25 +31,26 @@
 ## Phase 3: Native Runtime Bridge
 
 - [x] Choose the host integration layer: Electron, Tauri, or a local daemon/API
-- [ ] Replace mock lifecycle actions with real process spawning and termination
-- [ ] Discover live ports and reconcile them against reserved bindings
-- [ ] Pull real CPU, memory, disk, and network metrics from the host system
+- [x] Replace mock lifecycle actions with real process spawning and termination
+- [x] Discover live ports and reconcile them against reserved bindings
+- [x] Pull real CPU, memory, disk, and network metrics from the host system
 - [x] Add permission-safe command execution and process environment handling
 
 ### Phase 3 Notes
 
 - Electron is the selected host layer for the native bridge.
-- The renderer now loads runtime state through `src/runtime/provider.ts`, which preserves the current mock source while defining the future Electron preload seam.
+- The renderer now loads runtime state through `src/runtime/provider.ts` and requires the live Electron bridge.
 - The desktop shell now includes `electron/main.cjs`, `electron/preload.cjs`, and `electron/runtime.cjs` for a first live host scan.
 - `mewl.services.json` now defines Mewl-owned services that can be started, stopped, and restarted through the Electron bridge.
 - Managed autostart and watch-port settings now persist through the Electron bridge and drive the Automation view.
 - Startup profiles and quiet-mode presets can now control grouped managed services, and enabled boot profiles are applied on Electron hydration.
 - Managed launches now enforce explicit env inheritance, repo-bound working directories, executable validation, and reserved-port availability checks.
-- The temporary mock path still exists for the browser build, but the intended end state is no mock fallback once the Electron bridge owns the full runtime.
+- Browser access now stops at the desktop-required state instead of exposing a runtime fallback.
 
 ## Phase 4: Monitoring and Automation
 
-- [ ] Add restart policies, grouped startup profiles, and quiet-mode presets
+- [ ] Add restart policies
+- [x] Add grouped startup profiles and quiet-mode presets
 - [ ] Add alerts center filtering by severity, service, and time window
 - [ ] Surface process crash loops, orphaned ports, and unhealthy resource spikes
 - [ ] Add richer charts for CPU, memory, network, and disk trends

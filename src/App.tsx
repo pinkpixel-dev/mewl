@@ -54,7 +54,6 @@ import {
 } from "./data/runtime";
 import {
   chosenHostLayer,
-  createDefaultRuntimeSnapshot,
   getRuntimeSourceDescriptor,
   hydrateRuntimeSnapshot,
   type RuntimeActionResult,
@@ -279,28 +278,10 @@ function App() {
         }
 
         const persisted = readPersistedWorkspace();
-        const persistedProcesses = persisted?.runtime.processes;
-        const persistedPorts = persisted?.runtime.ports;
-        const persistedAlerts = persisted?.runtime.alerts;
-        const persistedAutomationRules = persisted?.runtime.automationRules;
-        const hydratedProcesses =
-          !isLiveElectronRuntime && persistedProcesses && persistedProcesses.length > 0
-            ? persistedProcesses
-            : snapshot.processes;
-        const hydratedPorts =
-          !isLiveElectronRuntime && persistedPorts && persistedPorts.length > 0
-            ? persistedPorts
-            : snapshot.ports;
-        const hydratedAlerts =
-          !isLiveElectronRuntime && persistedAlerts && persistedAlerts.length > 0
-            ? persistedAlerts
-            : snapshot.alerts;
-        const hydratedAutomationRules =
-          !isLiveElectronRuntime &&
-          persistedAutomationRules &&
-          persistedAutomationRules.length > 0
-            ? persistedAutomationRules
-            : snapshot.automationRules;
+        const hydratedProcesses = snapshot.processes;
+        const hydratedPorts = snapshot.ports;
+        const hydratedAlerts = snapshot.alerts;
+        const hydratedAutomationRules = snapshot.automationRules;
         const fallbackSelectedProcessId =
           hydratedProcesses[0]?.id ?? snapshot.processes[0]?.id ?? "";
 
@@ -471,27 +452,37 @@ function App() {
         : "starting";
 
   const restoreDefaultWorkspace = () => {
-    void createDefaultRuntimeSnapshot().then((snapshot) => {
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem(workspaceStorageKey);
-      }
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(workspaceStorageKey);
+    }
 
-      setProcesses(snapshot.processes);
-      setPorts(snapshot.ports);
-      setAlerts(snapshot.alerts);
-      setMonitorMetrics(snapshot.monitorMetrics);
-      setAutomationRules(snapshot.automationRules);
-      setCommandState(defaultCommandState);
-      setActiveView("overview");
-      setQuery("");
-      setStatusFilter("all");
-      setSidebarCollapsed(false);
-      setSelectedProcessId(snapshot.processes[0]?.id ?? "");
-      setExpandedProcessIds([]);
-      setAlertsOpen(false);
-      setRuntimeError(null);
-      setRuntimeStatus("ready");
-    });
+    setQuery("");
+    setStatusFilter("all");
+    setSidebarCollapsed(false);
+    setExpandedProcessIds([]);
+    setAlertsOpen(false);
+
+    void hydrateRuntimeSnapshot()
+      .then((snapshot) => {
+        setProcesses(snapshot.processes);
+        setPorts(snapshot.ports);
+        setAlerts(snapshot.alerts);
+        setMonitorMetrics(snapshot.monitorMetrics);
+        setAutomationRules(snapshot.automationRules);
+        setCommandState(defaultCommandState);
+        setActiveView("overview");
+        setSelectedProcessId(snapshot.processes[0]?.id ?? "");
+        setRuntimeError(null);
+        setRuntimeStatus("ready");
+      })
+      .catch((error) => {
+        setRuntimeStatus("error");
+        setRuntimeError(
+          error instanceof Error
+            ? error.message
+            : "Mewl could not reconnect to the Electron desktop bridge.",
+        );
+      });
   };
 
   const createProcessLogEntry = (level: ProcessLogLevel, text: string): ProcessLogEntry => ({
@@ -698,7 +689,7 @@ function App() {
         ...createProcessLogEntry(
           action === "restart" ? "warning" : "info",
           action === "start"
-            ? "Boot request accepted by the mock runtime bridge."
+            ? "Boot request accepted by the managed runtime bridge."
             : action === "stop"
               ? "Graceful shutdown request queued from the command strip."
               : "Restart request queued and the process is entering the drain window.",
@@ -1885,7 +1876,7 @@ function App() {
         title: "Workspace session could not be restored",
         detail:
           runtimeError ??
-          "The saved session data could not be read. Resetting the local workspace will rebuild the shell from the default runtime source.",
+          "The desktop bridge could not be reached. Resetting the workspace will retry the live Electron connection.",
         hex: accent.rose,
         icon: BellRing,
         actionLabel: "Reset Session",

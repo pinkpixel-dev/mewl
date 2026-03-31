@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 08:20 EDT
+
+- removed the remaining browser-side mock runtime fallback so `src/runtime/provider.ts` now requires the live Electron bridge
+- updated the renderer reset and error flow to retry the Electron connection instead of rebuilding from a fake snapshot
+- deleted the unused mock dataset and boot helpers from `src/data/runtime.ts`, leaving only the shared runtime contract types
+- refreshed the docs and roadmap so Mewl is described as an Electron-first desktop cockpit with no runtime fallback path
+- revalidated the app with a successful `npm run build`
+
 ## 2026-03-31 08:14 EDT
 
 - hardened managed service launches in `electron/runtime.cjs` by validating executable tokens, constraining service working directories to the workspace, and resolving commands against the configured PATH

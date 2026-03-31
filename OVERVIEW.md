@@ -4,7 +4,7 @@
 
 Mewl is a local process and port management app for Pink Pixel. This pass pushes the project from a visual scaffold into a more functional product shell by restoring workspace state, surfacing structured process logs, and handling runtime loading and failure states more deliberately.
 
-The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam so the renderer no longer depends directly on the mock boot helpers, adds a live host snapshot path through Electron preload IPC, and wires real lifecycle control for Mewl-owned services.
+The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, and wires real lifecycle control for Mewl-owned services.
 
 ## Technical Summary
 
@@ -29,7 +29,7 @@ The current implementation includes:
 - a clean dashboard made of summary cards plus short process and port preview lists
 - a dedicated Processes page with expandable cards and a full inspector surface
 - view-specific pages for port registry, monitor, and automation workflows
-- local state transitions that simulate lifecycle actions before a real runtime bridge exists
+- local state transitions that coordinate with the live Electron runtime bridge
 - workspace persistence for the active view, filters, expanded cards, selected process, alerts, and automation state
 - loading, empty, and error states for runtime hydration and filtered views
 
@@ -53,7 +53,7 @@ The shared UI layer also now supports:
 
 ### `src/data/runtime.ts`
 
-Holds the mock runtime model that currently powers the interface:
+Holds the shared TypeScript runtime contract used by both the renderer and the Electron bridge:
 
 - managed processes with command, cwd, PID, ports, and resource usage
 - structured stdout and stderr tails for each managed process
@@ -61,9 +61,7 @@ Holds the mock runtime model that currently powers the interface:
 - alerts and incident feed entries
 - monitor metrics
 - automation rules
-- helper functions for cloning and hydrating the runtime snapshot
-
-This file is the current contract surface for the future backend/native adapter.
+This file is the current contract surface for the live Electron adapter.
 
 ### `src/runtime/provider.ts`
 
@@ -71,10 +69,9 @@ Defines the runtime source boundary that the renderer now uses for hydration and
 
 The provider currently:
 
-- falls back to the mock runtime contract in the browser build
-- detects `window.mewlHost` when Mewl is hosted inside Electron
+- requires `window.mewlHost` when Mewl is hosted inside Electron
 - documents Electron as the chosen host layer for process control, port discovery, host metrics, and secure command execution
-- keeps the UI-facing `RuntimeSnapshot` contract stable while the native bridge is implemented
+- keeps the UI-facing `RuntimeSnapshot` contract stable while the Electron bridge evolves
 
 ### `electron/runtime.cjs`
 
@@ -122,12 +119,12 @@ This structure keeps the app close to the original mockup mood while making the 
 
 - search input uses `useDeferredValue` to keep filtering responsive
 - workspace changes use `startTransition` to keep view switching lightweight
-- lifecycle actions use `useTransition` to simulate non-blocking start, stop, restart, and scan operations
+- lifecycle actions use `useTransition` to coordinate non-blocking start, stop, restart, and scan operations with the Electron bridge
 - the workspace hydrates from the runtime contract and restores saved session state from local storage on boot
 - the sidebar can collapse to icon-only navigation for a roomier workspace
 - process cards can expand in place for more detail before the full inspector is needed
-- toggles mutate selected-service and automation state locally until a backend exists
-- inspector toggles and lifecycle actions append to stdout/stderr log tails so the mock runtime leaves useful history behind
+- toggles update managed-service settings and automation rules through the Electron bridge
+- inspector toggles and lifecycle actions append to stdout/stderr log tails from the live managed runtime
 - button glow behavior follows Sparklebots interaction patterns
 - progress indicators and animated signal bars add motion without crowding the layout
 - alert visibility uses local `useState` and conditional rendering for the top-right tray
@@ -135,17 +132,14 @@ This structure keeps the app close to the original mockup mood while making the 
 
 ## Current Limitations
 
-- no native process bridge yet, so OS process control is not live
-- Electron is chosen as the host layer, and lifecycle plus managed settings now cover services and startup profiles registered in `mewl.services.json`
+- Electron is the required runtime host, and lifecycle plus managed settings currently cover only services and startup profiles registered in `mewl.services.json`
 - no auth, multi-user roles, or workspace sync
 - no testing suite yet
 - no packaging for desktop delivery yet
 
 ## Extension Points
 
-- replace the browser fallback path with the real Electron-backed adapter exposed through the runtime provider
-- replace the remaining temporary browser mock fallback once the desktop bridge owns the full product path
-- implement the Electron preload and main-process bridge behind the runtime provider
+- keep expanding the Electron-backed adapter exposed through the runtime provider
 - expand lifecycle control beyond the starter managed-service config and add richer service definitions, environment handling, and exit diagnostics
 - add live port discovery and collision detection from the host machine
 - persist workspace profiles, startup groups, and automation presets beyond the single local session model

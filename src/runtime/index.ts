@@ -1,6 +1,5 @@
 export {
   chosenHostLayer,
-  createDefaultRuntimeSnapshot,
   getRuntimeSourceDescriptor,
   hydrateRuntimeSnapshot,
   type HostLayerChoice,

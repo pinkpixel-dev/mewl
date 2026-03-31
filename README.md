@@ -26,6 +26,8 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Update managed `autostart` and `watch ports` settings from the UI and persist them back to `mewl.services.json`
 - Boot managed startup profiles and quiet-mode presets through the Electron Automation view
 - Inspect a persisted automation history stream for starts, stops, profile runs, retries, and failures
+- Filter the alerts tray by severity, service, and time window when you need to narrow the current incident feed
+- Catch richer runtime issues including crash loops, reserved ports claimed by the wrong process, and unhealthy managed-service CPU or memory spikes
 - Launch managed services through a hardened Electron runner with explicit env inheritance, command tokenization, PATH resolution, and reserved-port guards
 - Reattach orphaned managed services that are already running on the host so lifecycle actions can reclaim and control them cleanly
 - Normalize accidental helper-process promotions back to a single managed entry so repeated `Manage` clicks on child processes do not create confusing duplicates in the saved config
@@ -59,6 +61,7 @@ This is the first real product pass, not the final native implementation yet.
 - Managed services can now opt into restart policies (`manual`, `on-failure`, or `always`) with bounded retry limits for the current desktop session.
 - Observed processes can now seed the Managed editor through an explicit review step instead of being silently promoted straight into saved config.
 - The live Processes page now exposes only two observed-process actions: create a managed draft from what Mewl can currently see, or kill the live pid without changing the managed catalog.
+- The alerts tray is now filterable and uses richer runtime metadata so it can point to a specific service, time window, and alert category instead of staying as a flat feed.
 
 ## Run Locally
 

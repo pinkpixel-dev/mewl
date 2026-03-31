@@ -127,6 +127,9 @@ export type AlertRecord = {
   detail: string;
   severity: AlertSeverity;
   stamp: string;
+  serviceId?: string;
+  serviceName?: string;
+  category?: "runtime" | "ports" | "automation" | "resources";
 };
 
 export type MonitorMetric = {

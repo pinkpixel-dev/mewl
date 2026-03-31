@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 14:54 EDT
+
+- added alert-center filtering in the tray for severity, service, and time window without pushing the workflow into a separate full-page view
+- expanded the Electron alert builder to flag crash loops, reserved-port drift, and unhealthy managed-service CPU or memory spikes alongside the existing host-level alerts
+- refreshed the README, overview, and roadmap to document the richer alerts model and marked the remaining Phase 4 alert items complete
+- revalidated the app with a successful `npm run build`
+
 ## 2026-03-31 14:37 EDT
 
 - added managed-service restart policies with bounded retry limits, including `manual`, `on-failure`, and `always` modes in the Managed editor

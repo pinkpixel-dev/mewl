@@ -71,6 +71,8 @@ import {
 type StatusFilter = "all" | "active" | "watching" | "issues";
 type RuntimeStatus = "loading" | "ready" | "error";
 type ProcessAction = "start" | "stop" | "restart" | "scan" | "kill";
+type AlertSeverityFilter = "all" | AlertSeverity;
+type AlertTimeWindow = "all" | "1h" | "24h" | "7d";
 
 type PersistedWorkspaceState = {
   version: 1;
@@ -128,6 +130,20 @@ const statusFilterOptions: Array<{ id: StatusFilter; label: string }> = [
   { id: "active", label: "Active" },
   { id: "watching", label: "Watching" },
   { id: "issues", label: "Issues" },
+];
+
+const alertSeverityOptions: Array<{ id: AlertSeverityFilter; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "critical", label: "Critical" },
+  { id: "warning", label: "Warning" },
+  { id: "info", label: "Info" },
+];
+
+const alertTimeWindowOptions: Array<{ id: AlertTimeWindow; label: string; hours: number | null }> = [
+  { id: "all", label: "All Time", hours: null },
+  { id: "1h", label: "1H", hours: 1 },
+  { id: "24h", label: "24H", hours: 24 },
+  { id: "7d", label: "7D", hours: 24 * 7 },
 ];
 
 const processToneMap: Record<ProcessStatus, "online" | "warning" | "offline" | "starting"> = {
@@ -243,6 +259,19 @@ const formatLogStamp = () =>
   }).format(new Date());
 
 const trimLogTail = (entries: ProcessLogEntry[]) => entries.slice(-processLogTailLimit);
+
+const parseAlertAgeHours = (stamp: string) => {
+  if (stamp === "now") {
+    return 0;
+  }
+
+  const parsed = Date.parse(stamp);
+  if (Number.isNaN(parsed)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return (Date.now() - parsed) / (1000 * 60 * 60);
+};
 
 const createEmptyManagedDraft = (): ManagedServiceDraft => ({
   name: "",
@@ -377,6 +406,9 @@ function App() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [alertSeverityFilter, setAlertSeverityFilter] = useState<AlertSeverityFilter>("all");
+  const [alertServiceFilter, setAlertServiceFilter] = useState("all");
+  const [alertTimeWindow, setAlertTimeWindow] = useState<AlertTimeWindow>("all");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedProcessId, setSelectedProcessId] = useState("");
   const [selectedManagedServiceId, setSelectedManagedServiceId] = useState("");
@@ -645,6 +677,22 @@ function App() {
   ).length;
   const automationFailureCount = automationHistory.filter((entry) => entry.outcome === "error").length;
   const latestAutomationEntries = automationHistory.slice(0, 10);
+  const alertServiceOptions = Array.from(
+    new Set(alerts.map((item) => item.serviceName).filter((value): value is string => Boolean(value))),
+  );
+  const selectedAlertTimeWindow = alertTimeWindowOptions.find((option) => option.id === alertTimeWindow);
+  const filteredAlerts = alerts.filter((item) => {
+    const matchesSeverity =
+      alertSeverityFilter === "all" ? true : item.severity === alertSeverityFilter;
+    const matchesService =
+      alertServiceFilter === "all" ? true : item.serviceName === alertServiceFilter;
+    const matchesTimeWindow =
+      selectedAlertTimeWindow?.hours == null
+        ? true
+        : parseAlertAgeHours(item.stamp) <= selectedAlertTimeWindow.hours;
+
+    return matchesSeverity && matchesService && matchesTimeWindow;
+  });
   const runtimeIndicatorTone =
     runtimeStatus === "ready"
       ? "online"
@@ -663,6 +711,9 @@ function App() {
     setExpandedProcessIds([]);
     setManagedCleanupOnly(false);
     setAlertsOpen(false);
+    setAlertSeverityFilter("all");
+    setAlertServiceFilter("all");
+    setAlertTimeWindow("all");
     setManagedEditorMode("edit");
     setManagedDraft(createEmptyManagedDraft());
     setManagedPrefillSourceId("");
@@ -745,6 +796,9 @@ function App() {
     detail,
     severity,
     stamp,
+    serviceId,
+    serviceName,
+    category,
   }: Omit<AlertRecord, "id">) => {
     setAlerts((current) => [
       {
@@ -753,6 +807,9 @@ function App() {
         detail,
         severity,
         stamp,
+        serviceId,
+        serviceName,
+        category,
       },
       ...current,
     ].slice(0, 6));
@@ -1436,15 +1493,65 @@ function App() {
 
   const renderAlertFeed = () => (
     <div className="space-y-2">
-      {alerts.length === 0 ? (
+      <div className="rounded-[22px] border border-white/8 bg-[#10151c]/92 p-3">
+        <div className="flex flex-wrap gap-2">
+          {alertSeverityOptions.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setAlertSeverityFilter(option.id)}
+              className={`rounded-full border px-3 py-1.5 text-[0.68rem] uppercase tracking-[0.22em] transition duration-300 ${
+                alertSeverityFilter === option.id
+                  ? "border-white/14 bg-black/26 text-white"
+                  : "border-white/8 bg-black/18 text-white/42 hover:text-white/72"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <select
+            value={alertServiceFilter}
+            onChange={(event) => setAlertServiceFilter(event.target.value)}
+            className="rounded-full border border-white/8 bg-black/18 px-3 py-2 text-[0.68rem] uppercase tracking-[0.22em] text-white/72 outline-none"
+          >
+            <option value="all">All Services</option>
+            {alertServiceOptions.map((serviceName) => (
+              <option key={serviceName} value={serviceName}>
+                {serviceName}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex flex-wrap gap-2">
+            {alertTimeWindowOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setAlertTimeWindow(option.id)}
+                className={`rounded-full border px-3 py-1.5 text-[0.68rem] uppercase tracking-[0.22em] transition duration-300 ${
+                  alertTimeWindow === option.id
+                    ? "border-white/14 bg-black/26 text-white"
+                    : "border-white/8 bg-black/18 text-white/42 hover:text-white/72"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {filteredAlerts.length === 0 ? (
         <div className="rounded-[22px] border border-white/8 bg-[#10151c]/92 px-4 py-5">
           <p className="text-sm font-semibold text-white/86">No fresh alerts</p>
           <p className="mt-2 text-sm text-white/52">
-            The runtime feed is quiet right now, so this tray is waiting for the next notable event.
+            The current alert filters do not match any items in the latest runtime feed.
           </p>
         </div>
       ) : null}
-      {alerts.map((item, index) => (
+      {filteredAlerts.map((item, index) => (
         <article
           key={item.id}
           className="rounded-[22px] border border-white/8 bg-[#10151c]/92 px-4 py-3"
@@ -1467,6 +1574,11 @@ function App() {
               <div className="flex items-center gap-3">
                 <StatusPill tone={severityToneMap[item.severity]} label={item.severity} />
                 <p className="text-xs uppercase tracking-[0.22em] text-white/32">{item.stamp}</p>
+                {item.serviceName ? (
+                  <p className="text-xs uppercase tracking-[0.22em] text-white/32">
+                    {item.serviceName}
+                  </p>
+                ) : null}
               </div>
               <div>
                 <p className="text-sm font-semibold text-white/90">{item.title}</p>
@@ -3212,7 +3324,7 @@ function App() {
                 </button>
 
                 {alertsOpen ? (
-                  <div className="absolute right-0 top-[calc(100%+0.85rem)] z-50 w-[360px] rounded-[26px] border border-white/8 bg-[#0c1015]/96 p-3 shadow-[0_34px_90px_-42px_rgba(0,0,0,0.96)] backdrop-blur-2xl">
+                  <div className="absolute right-0 top-[calc(100%+0.85rem)] z-50 w-[420px] max-w-[calc(100vw-2rem)] rounded-[26px] border border-white/8 bg-[#0c1015]/96 p-3 shadow-[0_34px_90px_-42px_rgba(0,0,0,0.96)] backdrop-blur-2xl">
                     {renderAlertFeed()}
                   </div>
                 ) : null}

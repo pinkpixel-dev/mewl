@@ -86,8 +86,39 @@ function createAutomationHistoryEntry({
   };
 }
 
+function createAlert({
+  id,
+  title,
+  detail,
+  severity,
+  stamp = "now",
+  serviceId,
+  serviceName,
+  category,
+}) {
+  return {
+    id,
+    title,
+    detail,
+    severity,
+    stamp,
+    serviceId,
+    serviceName,
+    category,
+  };
+}
+
 function trimAutomationHistory(entries) {
   return entries.slice(0, automationHistoryLimit);
+}
+
+function hoursSinceStamp(stamp) {
+  const parsed = Date.parse(stamp);
+  if (Number.isNaN(parsed)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return (Date.now() - parsed) / (1000 * 60 * 60);
 }
 
 function normalizeRestartPolicy(value) {
@@ -1828,7 +1859,7 @@ async function initializeManagedServices() {
   }
 }
 
-function buildAlerts(processes, ports, metrics, services) {
+function buildAlerts(processes, ports, metrics, services, history) {
   const alerts = [];
   const conflictPorts = ports.filter((port) => port.status === "conflict");
   const publicPorts = ports.filter((port) => port.exposure === "public");
@@ -1837,75 +1868,185 @@ function buildAlerts(processes, ports, metrics, services) {
     const serviceState = getManagedState(service.id);
     return !isServiceRunning(serviceState);
   });
+  const resourceSpikes = processes
+    .filter(
+      (process) =>
+        process.managed &&
+        process.status !== "stopped" &&
+        (process.cpu >= 75 || process.memory >= 1200),
+    )
+    .slice(0, 2);
+  const recentCrashLoops = services
+    .map((service) => {
+      const recentFailures = history.filter(
+        (entry) =>
+          entry.serviceId === service.id &&
+          entry.outcome === "error" &&
+          hoursSinceStamp(entry.stamp) <= 2,
+      ).length;
+      const recentPolicyRetries = history.filter(
+        (entry) =>
+          entry.serviceId === service.id &&
+          entry.source === "policy" &&
+          hoursSinceStamp(entry.stamp) <= 2,
+      ).length;
+
+      return {
+        service,
+        recentFailures,
+        recentPolicyRetries,
+      };
+    })
+    .filter((entry) => entry.recentFailures >= 2 || entry.recentPolicyRetries >= 3)
+    .slice(0, 2);
+  const orphanedReservedPorts = services
+    .flatMap((service) =>
+      service.ports.map((port) => ({
+        service,
+        port,
+      })),
+    )
+    .filter(({ service, port }) => {
+      const binding = ports.find((item) => item.port === port && item.status !== "standby");
+      if (!binding) {
+        return false;
+      }
+
+      return binding.serviceId !== service.id;
+    })
+    .slice(0, 2);
 
   if (conflictPorts.length > 0) {
-    alerts.push({
-      id: "live-alert-conflicts",
-      title: "Port conflict detected",
-      detail: `${conflictPorts.length} live binding${conflictPorts.length === 1 ? "" : "s"} share a reserved port.`,
-      severity: "critical",
-      stamp: "now",
-    });
+    alerts.push(
+      createAlert({
+        id: "live-alert-conflicts",
+        title: "Port conflict detected",
+        detail: `${conflictPorts.length} live binding${conflictPorts.length === 1 ? "" : "s"} share a reserved port.`,
+        severity: "critical",
+        category: "ports",
+      }),
+    );
   }
 
   if (publicPorts.length > 0) {
-    alerts.push({
-      id: "live-alert-public",
-      title: "Public listeners exposed",
-      detail: `${publicPorts.length} binding${publicPorts.length === 1 ? "" : "s"} are reachable beyond localhost.`,
-      severity: "warning",
-      stamp: "now",
-    });
+    alerts.push(
+      createAlert({
+        id: "live-alert-public",
+        title: "Public listeners exposed",
+        detail: `${publicPorts.length} binding${publicPorts.length === 1 ? "" : "s"} are reachable beyond localhost.`,
+        severity: "warning",
+        category: "ports",
+      }),
+    );
   }
 
   if (hotProcess && hotProcess.cpu >= 70) {
-    alerts.push({
-      id: "live-alert-cpu",
-      title: "Hot process on the host",
-      detail: `${hotProcess.name} is currently leading CPU usage at ${hotProcess.cpu}%.`,
-      severity: "warning",
-      stamp: "now",
-    });
+    alerts.push(
+      createAlert({
+        id: "live-alert-cpu",
+        title: "Hot process on the host",
+        detail: `${hotProcess.name} is currently leading CPU usage at ${hotProcess.cpu}%.`,
+        severity: "warning",
+        serviceId: hotProcess.id,
+        serviceName: hotProcess.name,
+        category: "resources",
+      }),
+    );
   }
 
   if (metrics.memory.value >= 80) {
-    alerts.push({
-      id: "live-alert-memory",
-      title: "Memory pressure is elevated",
-      detail: `Host memory pressure is currently ${metrics.memory.value}%.`,
-      severity: "warning",
-      stamp: "now",
-    });
+    alerts.push(
+      createAlert({
+        id: "live-alert-memory",
+        title: "Memory pressure is elevated",
+        detail: `Host memory pressure is currently ${metrics.memory.value}%.`,
+        severity: "warning",
+        category: "resources",
+      }),
+    );
   }
 
   if (metrics.gpu.available !== false && metrics.gpu.value >= 85) {
-    alerts.push({
-      id: "live-alert-gpu",
-      title: "GPU load is elevated",
-      detail: `Host GPU load is currently ${metrics.gpu.displayValue ?? `${metrics.gpu.value}%`}.`,
-      severity: "warning",
-      stamp: "now",
-    });
+    alerts.push(
+      createAlert({
+        id: "live-alert-gpu",
+        title: "GPU load is elevated",
+        detail: `Host GPU load is currently ${metrics.gpu.displayValue ?? `${metrics.gpu.value}%`}.`,
+        severity: "warning",
+        category: "resources",
+      }),
+    );
   }
 
   if (stoppedManaged.length > 0) {
-    alerts.push({
-      id: "live-alert-managed",
-      title: "Managed service is parked",
-      detail: `${stoppedManaged[0].name} is registered with Mewl and ready to start from the desktop bridge.`,
-      severity: "info",
-      stamp: "now",
-    });
+    alerts.push(
+      createAlert({
+        id: "live-alert-managed",
+        title: "Managed service is parked",
+        detail: `${stoppedManaged[0].name} is registered with Mewl and ready to start from the desktop bridge.`,
+        severity: "info",
+        serviceId: stoppedManaged[0].id,
+        serviceName: stoppedManaged[0].name,
+        category: "runtime",
+      }),
+    );
+  }
+
+  for (const spike of resourceSpikes) {
+    alerts.push(
+      createAlert({
+        id: `live-alert-spike-${spike.id}`,
+        title: "Managed service is running hot",
+        detail:
+          spike.cpu >= 75
+            ? `${spike.name} is drawing ${spike.cpu}% CPU right now.`
+            : `${spike.name} is holding ${spike.memory} MB and may need attention.`,
+        severity: spike.cpu >= 85 || spike.memory >= 1800 ? "critical" : "warning",
+        serviceId: spike.id,
+        serviceName: spike.name,
+        category: "resources",
+      }),
+    );
+  }
+
+  for (const loop of recentCrashLoops) {
+    alerts.push(
+      createAlert({
+        id: `live-alert-crash-loop-${loop.service.id}`,
+        title: "Managed service may be crash looping",
+        detail: `${loop.service.name} logged ${loop.recentFailures} recent failure${loop.recentFailures === 1 ? "" : "s"} and ${loop.recentPolicyRetries} policy retr${loop.recentPolicyRetries === 1 ? "y" : "ies"} in the last two hours.`,
+        severity: "critical",
+        serviceId: loop.service.id,
+        serviceName: loop.service.name,
+        category: "automation",
+      }),
+    );
+  }
+
+  for (const orphaned of orphanedReservedPorts) {
+    alerts.push(
+      createAlert({
+        id: `live-alert-orphaned-port-${orphaned.service.id}-${orphaned.port}`,
+        title: "Reserved port is held by another process",
+        detail: `${orphaned.service.name} expects port ${orphaned.port}, but the live binding currently belongs to a different process.`,
+        severity: "critical",
+        serviceId: orphaned.service.id,
+        serviceName: orphaned.service.name,
+        category: "ports",
+      }),
+    );
   }
 
   if (alerts.length === 0) {
-    alerts.push({
-      id: "live-alert-quiet",
-      title: "Live host snapshot is healthy",
-      detail: "No immediate port conflicts or pressure spikes were detected in the latest scan.",
-      severity: "info",
-      stamp: "now",
-    });
+    alerts.push(
+      createAlert({
+        id: "live-alert-quiet",
+        title: "Live host snapshot is healthy",
+        detail: "No immediate port conflicts or pressure spikes were detected in the latest scan.",
+        severity: "info",
+        category: "runtime",
+      }),
+    );
   }
 
   return alerts.slice(0, 6);
@@ -2135,7 +2276,7 @@ async function hydrateRuntimeSnapshot() {
   return {
     processes: [...managedProcesses, ...discoveredProcesses],
     ports,
-    alerts: buildAlerts([...managedProcesses, ...discoveredProcesses], ports, metrics, services),
+    alerts: buildAlerts([...managedProcesses, ...discoveredProcesses], ports, metrics, services, history),
     monitorMetrics: [metrics.cpu, metrics.memory, metrics.disk, metrics.network, metrics.gpu],
     automationRules: buildAutomationRules(services, profiles),
     automationHistory: history,

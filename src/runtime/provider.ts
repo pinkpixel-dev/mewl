@@ -74,7 +74,7 @@ export function getRuntimeSourceDescriptor(): RuntimeSourceDescriptor {
     return {
       id: "electron",
       label: "Electron bridge",
-      badgeLabel: "electron live",
+      badgeLabel: "",
       detail:
         "The renderer is connected to the Electron preload bridge and is reading live host state.",
       hostLayer: chosenHostLayer.id,

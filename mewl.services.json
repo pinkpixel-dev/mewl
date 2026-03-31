@@ -5,14 +5,30 @@
       "name": "workspace-sandbox",
       "description": "Small managed HTTP server rooted at this repository so Mewl can exercise real lifecycle control without touching arbitrary host processes.",
       "command": "python3",
-      "args": ["-m", "http.server", "4011", "--bind", "127.0.0.1"],
+      "args": [
+        "-m",
+        "http.server",
+        "4011",
+        "--bind",
+        "127.0.0.1"
+      ],
       "cwd": ".",
       "runtime": "python",
       "group": "workspace",
       "watchPorts": true,
       "autoStart": true,
-      "ports": [4011],
-      "inheritEnv": ["PATH", "HOME", "LANG", "TERM", "USER", "LOGNAME", "SHELL"],
+      "ports": [
+        4011
+      ],
+      "inheritEnv": [
+        "PATH",
+        "HOME",
+        "LANG",
+        "TERM",
+        "USER",
+        "LOGNAME",
+        "SHELL"
+      ],
       "env": {}
     },
     {
@@ -20,14 +36,30 @@
       "name": "workspace-preview",
       "description": "Second managed HTTP server for trying grouped startup and quiet-mode behavior inside Mewl.",
       "command": "python3",
-      "args": ["-m", "http.server", "4012", "--bind", "127.0.0.1"],
+      "args": [
+        "-m",
+        "http.server",
+        "4012",
+        "--bind",
+        "127.0.0.1"
+      ],
       "cwd": ".",
       "runtime": "python",
       "group": "workspace",
       "watchPorts": true,
-      "autoStart": false,
-      "ports": [4012],
-      "inheritEnv": ["PATH", "HOME", "LANG", "TERM", "USER", "LOGNAME", "SHELL"],
+      "autoStart": true,
+      "ports": [
+        4012
+      ],
+      "inheritEnv": [
+        "PATH",
+        "HOME",
+        "LANG",
+        "TERM",
+        "USER",
+        "LOGNAME",
+        "SHELL"
+      ],
       "env": {}
     }
   ],
@@ -39,7 +71,10 @@
       "cadence": "session start",
       "enabled": true,
       "action": "start",
-      "serviceIds": ["workspace-sandbox", "workspace-preview"]
+      "serviceIds": [
+        "workspace-sandbox",
+        "workspace-preview"
+      ]
     },
     {
       "id": "quiet-mode",
@@ -48,7 +83,9 @@
       "cadence": "manual profile",
       "enabled": false,
       "action": "stop",
-      "serviceIds": ["workspace-preview"]
+      "serviceIds": [
+        "workspace-preview"
+      ]
     }
   ]
 }

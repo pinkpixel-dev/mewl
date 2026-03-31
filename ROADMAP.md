@@ -27,6 +27,7 @@
 - [x] Add per-process log tails and structured stdout/stderr panes
 - [x] Add empty, loading, and error states for future live runtime sources
 - [x] Persist filters, selected views, and workspace preferences
+- [x] Tune the Ports registry column sizing so longer target bindings stay readable
 
 ## Phase 3: Native Runtime Bridge
 
@@ -41,6 +42,8 @@
 - Electron is the selected host layer for the native bridge.
 - The renderer now loads runtime state through `src/runtime/provider.ts` and requires the live Electron bridge.
 - The desktop shell now includes `electron/main.cjs`, `electron/preload.cjs`, and `electron/runtime.cjs` for a first live host scan.
+- The production renderer now builds with relative asset URLs so `npm run desktop` can load `dist/index.html` inside Electron without a blank file-protocol window.
+- The development desktop flow now pins Vite to `127.0.0.1:29463` so Electron no longer races into a `localhost` versus `127.0.0.1` mismatch.
 - `mewl.services.json` now defines Mewl-owned services that can be started, stopped, and restarted through the Electron bridge.
 - Managed autostart and watch-port settings now persist through the Electron bridge and drive the Automation view.
 - Startup profiles and quiet-mode presets can now control grouped managed services, and enabled boot profiles are applied on Electron hydration.

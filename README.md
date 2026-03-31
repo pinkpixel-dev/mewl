@@ -72,6 +72,16 @@ Run the Electron desktop shell against the live host bridge:
 npm run dev:desktop
 ```
 
+The development Electron flow now binds Vite explicitly to `127.0.0.1:29463` so the desktop shell and dev server resolve the same loopback address. If you see Electron's insecure CSP warning in development, that warning is expected from the Vite dev server and is not the cause of a blank window.
+
+Run the production-style Electron shell with a fresh renderer build:
+
+```bash
+npm run desktop
+```
+
+`npm run desktop` now rebuilds the Vite renderer before launch, and the production bundle emits relative asset paths so Electron can load `dist/index.html` over `file://` without dropping to a blank window.
+
 Managed desktop services are defined in [`mewl.services.json`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/mewl.services.json). Mewl only performs lifecycle control for services listed there, while other discovered host processes stay read-only.
 Those same managed services now drive the inspector toggles and Electron automation rules, so the UI edits the real desktop config instead of local-only state.
 Profiles in that same file can now boot or quiet grouped services through the Automation page, and enabled startup profiles are applied when the Electron runtime hydrates.
@@ -124,6 +134,8 @@ The current product direction is intentionally utility-first rather than dashboa
 - structured process logs and session memory so the shell feels more like a real local cockpit
 - a runtime source abstraction that boots only when the Electron bridge is available
 - a live Electron host bridge that can scan the current user session for processes, ports, and machine pressure
+- an Electron-safe production renderer build that uses relative asset paths instead of web-only absolute `/assets/...` URLs
+- a tuned Ports registry layout that keeps longer `Target` bindings readable in the desktop shell
 - config-driven managed services so desktop lifecycle actions only touch processes Mewl explicitly owns
 - managed service settings that round-trip between the React UI and `mewl.services.json`
 - startup profiles that can boot or quiet groups of Mewl-owned services through the Electron bridge

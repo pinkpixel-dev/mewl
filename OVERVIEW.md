@@ -14,7 +14,8 @@ The latest iteration chooses Electron as the native host direction, introduces a
 - Styling: Tailwind CSS 4 plus custom CSS tokens and effects
 - Icons: lucide-react
 - Asset strategy: static assets served from `public/`
-- Dev server port: `29463`
+- Production desktop renderer: built with relative asset paths so Electron can load the bundle from `dist/index.html`
+- Dev server address: `127.0.0.1:29463`
 
 ## Application Structure
 
@@ -29,6 +30,7 @@ The current implementation includes:
 - a clean dashboard made of summary cards plus short process and port preview lists
 - a dedicated Processes page with expandable cards and a full inspector surface
 - view-specific pages for port registry, monitor, and automation workflows
+- a ports registry table with a wider target column and wrapping behavior for longer bind addresses
 - local state transitions that coordinate with the live Electron runtime bridge
 - workspace persistence for the active view, filters, expanded cards, selected process, alerts, and automation state
 - loading, empty, and error states for runtime hydration and filtered views
@@ -90,6 +92,21 @@ The current implementation:
 - validates managed commands before spawn by requiring a single executable token, a workspace-safe cwd, an explicit inherited environment, and available reserved ports
 - keeps discovered host processes read-only so Mewl does not send lifecycle signals to processes it does not own
 
+### `electron/main.cjs`
+
+Owns the Electron window boot flow for both development and production:
+
+- loads the Vite dev server when `MEWL_RENDERER_URL` is present
+- loads `dist/index.html` in production mode
+- now logs `did-fail-load` and renderer-crash events so blank-window failures are easier to diagnose
+
+### `vite.config.ts`
+
+Defines the renderer build and development server behavior:
+
+- uses a relative `base` so production assets load correctly from Electron's `file://` path
+- binds both dev and preview to `127.0.0.1:29463` so Electron and Vite agree on the same loopback address during desktop development
+
 ### `src/styles.css`
 
 Holds the visual system outside component logic:
@@ -136,6 +153,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - no auth, multi-user roles, or workspace sync
 - no testing suite yet
 - no packaging for desktop delivery yet
+- the local terminal environment used for automated verification still reports an Electron bootstrap issue before the app process fully initializes, so the fix here was validated by build output and runtime-path inspection rather than a successful interactive Electron launch in-tool
 
 ## Extension Points
 

@@ -12,7 +12,7 @@
     "dev:desktop": "concurrently -k \"npm:dev:web\" \"npm:dev:electron\"",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "desktop": "electron electron/main.cjs"
+    "desktop": "npm run build && electron electron/main.cjs"
   },
   "keywords": [
     "mewl",

@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 08:33 EDT
+
+- widened the Ports registry table layout so the `Target` column gets more room in the desktop shell
+- updated the service and target cells to wrap longer values instead of clipping bind targets at the card edge
+- refreshed the README, overview, and roadmap to note the port-table readability fix
+
+## 2026-03-31 08:27 EDT
+
+- fixed the Electron development renderer path by binding Vite and preview explicitly to `127.0.0.1`, matching the `MEWL_RENDERER_URL` used by `npm run dev:desktop`
+- documented that Electron's insecure CSP warning is expected in Vite-powered development and was not the black-screen root cause
+- refreshed the README, overview, and roadmap with the loopback-host alignment change
+
+## 2026-03-31 08:25 EDT
+
+- fixed the Electron production renderer path by setting Vite `base` to `./`, so built assets resolve correctly when `dist/index.html` is loaded over `file://`
+- changed `npm run desktop` to rebuild the renderer before launching Electron, which avoids stale desktop bundles after UI changes
+- added `did-fail-load` and renderer-exit diagnostics in `electron/main.cjs` so future blank-window regressions surface useful console output
+- refreshed the project docs to describe the Electron asset-path fix and the updated desktop launch flow
+
 ## 2026-03-31 08:20 EDT
 
 - removed the remaining browser-side mock runtime fallback so `src/runtime/provider.ts` now requires the live Electron bridge

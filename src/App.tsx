@@ -1557,8 +1557,8 @@ function App() {
 
         <div className="mt-6 overflow-x-auto rounded-[28px] border border-white/8 bg-black/18">
           {filteredPorts.length > 0 ? (
-            <div className="min-w-[760px]">
-              <div className="grid grid-cols-[0.6fr_0.7fr_1fr_0.9fr_0.8fr_1.2fr] gap-4 border-b border-white/8 px-5 py-4 text-xs uppercase tracking-[0.24em] text-white/38">
+            <div className="min-w-[940px]">
+              <div className="grid grid-cols-[72px_76px_minmax(0,1.1fr)_120px_110px_minmax(180px,1.45fr)] gap-4 border-b border-white/8 px-5 py-4 text-xs uppercase tracking-[0.24em] text-white/38">
                 <span>Port</span>
                 <span>Proto</span>
                 <span>Service</span>
@@ -1571,19 +1571,19 @@ function App() {
                 {filteredPorts.map((port) => (
                   <div
                     key={port.id}
-                    className="grid grid-cols-[0.6fr_0.7fr_1fr_0.9fr_0.8fr_1.2fr] gap-4 px-5 py-4 transition duration-300 hover:bg-white/[0.03]"
+                    className="grid grid-cols-[72px_76px_minmax(0,1.1fr)_120px_110px_minmax(180px,1.45fr)] gap-4 px-5 py-4 transition duration-300 hover:bg-white/[0.03]"
                   >
                     <p className="text-sm font-semibold text-white">{port.port}</p>
                     <p className="text-sm text-white/58 uppercase">{port.protocol}</p>
-                    <div>
-                      <p className="text-sm text-white/86">{port.service}</p>
+                    <div className="min-w-0">
+                      <p className="break-words text-sm text-white/86">{port.service}</p>
                       <p className="text-xs text-white/38">{port.note}</p>
                     </div>
                     <p className="text-sm capitalize text-white/62">{port.exposure}</p>
                     <p className={`text-sm font-medium capitalize ${portTextClassMap[port.status]}`}>
                       {port.status}
                     </p>
-                    <p className="text-sm text-white/46">{port.target}</p>
+                    <p className="break-all text-sm text-white/46">{port.target}</p>
                   </div>
                 ))}
               </div>

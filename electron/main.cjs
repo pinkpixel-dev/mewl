@@ -26,6 +26,18 @@ function createWindow() {
     },
   });
 
+  mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
+    console.error("Mewl renderer failed to load", {
+      errorCode,
+      errorDescription,
+      validatedURL,
+    });
+  });
+
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    console.error("Mewl renderer process exited unexpectedly", details);
+  });
+
   if (devServerUrl) {
     void mainWindow.loadURL(devServerUrl);
     mainWindow.webContents.openDevTools({ mode: "detach" });

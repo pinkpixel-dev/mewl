@@ -139,9 +139,9 @@ function App() {
             <img
               src="/icon.png"
               alt="Mewl icon"
-              className="size-16 rounded-[18px] border border-white/10 object-cover shadow-[0_0_32px_rgba(148,163,184,0.18)]"
+              className="size-20 rounded-[18px] border border-white/10 object-cover shadow-[0_0_32px_rgba(148,163,184,0.18)]"
             />
-            <p className="text-[0.9rem] font-semibold uppercase tracking-[0.32em] text-white/50">
+            <p className="text-[1.0rem] font-semibold uppercase tracking-[0.32em] text-white/50">
               Mewl
             </p>
           </div>

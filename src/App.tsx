@@ -1741,7 +1741,7 @@ function App() {
               <img
                 src="/icon.png"
                 alt="Mewl icon"
-                className="size-14 rounded-[16px] border border-white/10 object-cover shadow-[0_0_32px_rgba(148,163,184,0.18)]"
+                className="size-18 rounded-[16px] border border-white/10 object-cover shadow-[0_0_32px_rgba(148,163,184,0.18)]"
               />
               {!sidebarCollapsed ? (
                 <p className="text-[0.95rem] font-semibold uppercase tracking-[0.32em] text-white/56">

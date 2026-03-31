@@ -27,6 +27,7 @@ The current implementation includes:
 
 - a collapsible left navigation rail for overview, processes, ports, monitor, and automation
 - a compact action/search header with no large banner copy
+- a rose-accented shared search field that matches the Pink Pixel brand color
 - a clean dashboard made of summary cards plus short process and port preview lists
 - a dedicated Processes page with expandable cards and a full inspector surface
 - view-specific pages for port registry, monitor, and automation workflows
@@ -99,6 +100,7 @@ Owns the Electron window boot flow for both development and production:
 - loads the Vite dev server when `MEWL_RENDERER_URL` is present
 - loads `dist/index.html` in production mode
 - now logs `did-fail-load` and renderer-crash events so blank-window failures are easier to diagnose
+- quits the app when the main window closes so the desktop dev shell does not leave the paired Vite server stranded in the background
 
 ### `vite.config.ts`
 

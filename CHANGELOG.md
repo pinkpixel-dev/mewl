@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 08:40 EDT
+
+- changed the Electron main window shutdown flow so closing the app quits the process cleanly instead of leaving the desktop dev shell running in the background
+- removed the automatic detached DevTools launch in development, which was keeping the Electron session alive after the main window closed
+- refreshed the README, overview, and roadmap to document the desktop shutdown fix
+
+## 2026-03-31 08:38 EDT
+
+- changed the shared workspace search field to use the Pink Pixel rose accent instead of green for both the search icon and focus glow
+- refreshed the README, overview, and roadmap to keep the branded search treatment documented
+
 ## 2026-03-31 08:33 EDT
 
 - widened the Ports registry table layout so the `Target` column gets more room in the desktop shell

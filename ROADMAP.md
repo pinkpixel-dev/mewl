@@ -28,6 +28,7 @@
 - [x] Add empty, loading, and error states for future live runtime sources
 - [x] Persist filters, selected views, and workspace preferences
 - [x] Tune the Ports registry column sizing so longer target bindings stay readable
+- [x] Align the shared search field accent with the Pink Pixel rose brand color
 
 ## Phase 3: Native Runtime Bridge
 
@@ -44,6 +45,7 @@
 - The desktop shell now includes `electron/main.cjs`, `electron/preload.cjs`, and `electron/runtime.cjs` for a first live host scan.
 - The production renderer now builds with relative asset URLs so `npm run desktop` can load `dist/index.html` inside Electron without a blank file-protocol window.
 - The development desktop flow now pins Vite to `127.0.0.1:29463` so Electron no longer races into a `localhost` versus `127.0.0.1` mismatch.
+- Closing the main desktop window now quits Electron cleanly in development so `dev:desktop` does not leave the Vite port occupied in the background.
 - `mewl.services.json` now defines Mewl-owned services that can be started, stopped, and restarted through the Electron bridge.
 - Managed autostart and watch-port settings now persist through the Electron bridge and drive the Automation view.
 - Startup profiles and quiet-mode presets can now control grouped managed services, and enabled boot profiles are applied on Electron hydration.

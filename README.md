@@ -73,6 +73,7 @@ npm run dev:desktop
 ```
 
 The development Electron flow now binds Vite explicitly to `127.0.0.1:29463` so the desktop shell and dev server resolve the same loopback address. If you see Electron's insecure CSP warning in development, that warning is expected from the Vite dev server and is not the cause of a blank window.
+Closing the main Mewl window in `npm run dev:desktop` now quits the Electron process instead of leaving a detached DevTools-backed session running in the background, so the paired Vite server is released cleanly too.
 
 Run the production-style Electron shell with a fresh renderer build:
 
@@ -128,6 +129,7 @@ The current product direction is intentionally utility-first rather than dashboa
 
 - collapsible left navigation rail for overview, processes, ports, monitor, and automation
 - compact operational header with lifecycle actions, search, and alert tray instead of hero copy
+- the shared search field now uses the Pink Pixel rose accent for its icon and focus glow
 - clean overview dashboard with summary cards and short preview lists instead of oversized explainer surfaces
 - dedicated Processes page with expandable cards and a full-width inspector
 - dedicated Ports and Monitor pages for deeper operational detail

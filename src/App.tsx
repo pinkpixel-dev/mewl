@@ -2045,7 +2045,7 @@ function App() {
                 <CandyInput
                   value={query}
                   onChange={setQuery}
-                  hex={accent.green}
+                  hex={accent.rose}
                   placeholder="Search services, ports, folders, or commands..."
                 />
               </div>

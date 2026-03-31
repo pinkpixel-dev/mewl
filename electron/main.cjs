@@ -38,9 +38,14 @@ function createWindow() {
     console.error("Mewl renderer process exited unexpectedly", details);
   });
 
+  mainWindow.on("closed", () => {
+    if (!app.isQuitting) {
+      app.quit();
+    }
+  });
+
   if (devServerUrl) {
     void mainWindow.loadURL(devServerUrl);
-    mainWindow.webContents.openDevTools({ mode: "detach" });
     return mainWindow;
   }
 
@@ -81,5 +86,6 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", async () => {
+  app.isQuitting = true;
   await shutdownManagedServices();
 });

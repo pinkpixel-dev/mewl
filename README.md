@@ -7,11 +7,11 @@ Mewl is a server manager app scaffold for Pink Pixel. It pairs a dark textured b
 - React + TypeScript + Vite app scaffold
 - Tailwind CSS 4 wired through the Vite plugin
 - Pink Pixel branding with the provided `icon.png` used for app identity and favicon
-- Dotted dark background with subtle noise and ambient color glow
-- Frosted glass panels for navigation, command surfaces, and utility modules
-- Sparklebots-style buttons, stat cards, toggles, and progress bars
-- Header actions now align to the left of search for a tighter command strip on desktop
-- Sidebar flow-health telemetry now scales cleanly inside the narrower rail
+- Dark slate background with dotted texture and restrained neutral lighting
+- Gray glass panels with accent glows instead of colored card fills
+- Sparklebots-style buttons, stat cards, toggles, progress bars, and alerts tray using five accent colors
+- Top-right notification bell replaces the old bottom activity panel
+- Copy-light dashboard surfaces built from labels, values, icons, and controls
 - Responsive desktop and mobile layout validation
 
 ## Stack
@@ -71,8 +71,8 @@ npm run preview
 The current scaffold is intentionally product-like rather than starter-like:
 
 - left navigation rail with icon-led brand treatment
-- compact operational header with actions first and search to the right
-- compact metric cards with neon edge glow
+- compact operational header with actions, search, and a top-right alerts trigger
+- compact metric cards with neutral fills and accent edge glow
 - server table and automation controls as primary workspace surfaces
 - evenly spaced workspace grids that keep major cards aligned without wasted vertical gaps
 - dark dotted texture to echo the mockup instead of a flat black background
@@ -90,4 +90,4 @@ The current scaffold is intentionally product-like rather than starter-like:
 
 - `mockup.png` remains the visual reference image in the repository.
 - `public/icon.png` is used by the app shell and browser tab.
-- The current scaffold is a polished UI foundation with tightened dashboard spacing and does not yet include real server APIs or authentication.
+- The current scaffold is a polished UI foundation with stripped-down copy and does not yet include real server APIs or authentication.

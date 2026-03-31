@@ -9,6 +9,8 @@
 - [x] Match the general layout direction of `mockup.png`
 - [x] Tighten dashboard spacing and align the workspace command strip
 - [x] Make the sidebar telemetry card responsive within the fixed navigation rail
+- [x] Shift the visual system to neutral slate surfaces with accent-only color
+- [x] Replace the bottom activity panel with a top-right notifications tray
 
 ## Phase 2: Product Wiring
 

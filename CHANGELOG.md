@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-03-31 05:02 EDT
+
+- replaced the pink-purple page backdrop with a dark slate background, dotted texture, and neutral glass surfaces
+- converted colored cards to gray cards with accent glows so color now lives in controls, icons, charts, and progress
+- redistributed accent usage across rose, purple, cyan, green, and amber Sparklebots components
+- removed scaffold-style explanatory copy from the main dashboard cards, metrics, and activity surfaces
+- replaced the old bottom activity thread card with a top-right bell button that opens a compact notifications tray
+- removed leftover footer scaffolding and simplified the fleet table and guardrails panel for a cleaner production-style UI
+- revalidated the refresh with a successful production build and headless browser screenshots of the closed and open alerts states
+
 ## 2026-03-31 04:50 EDT
 
 - tightened the main dashboard spacing so the workspace controls sit directly under `Active Workspace`

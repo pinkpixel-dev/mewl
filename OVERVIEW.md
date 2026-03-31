@@ -17,7 +17,7 @@ Mewl is a server manager interface scaffold designed for Pink Pixel. The goal of
 
 ### `src/App.tsx`
 
-Defines the dashboard layout, page sections, sample server data, activity feed, and interactive state. The current composition keeps the command strip directly under the workspace label, uses balanced content columns, and keeps the sidebar rail compact.
+Defines the dashboard layout, page sections, sample server data, notification tray, and interactive state. The current composition keeps the command strip directly under the workspace label, places alerts behind a top-right bell trigger, and removes longer scaffold copy from the main surfaces.
 
 ### `src/components/ui.tsx`
 
@@ -31,7 +31,7 @@ Contains reusable presentation components used throughout the app:
 - `HologramProgress`
 - `SignalBars`
 
-The shared UI layer now also supports width-aware button and signal-bar composition so tighter regions such as the sidebar can reuse the same components without overflow.
+The shared UI layer now also supports width-aware button and signal-bar composition, neutral slate surfaces, and optional minimal card copy so tighter regions such as the sidebar can reuse the same components without overflow or filler text.
 
 ### `src/styles.css`
 
@@ -50,19 +50,19 @@ Holds the visual system outside component logic:
 The current scaffold is organized into five major workspace zones:
 
 1. Left navigation rail
-2. Active workspace command strip
-3. Current deck and live pulse summary row
+2. Active workspace header with alert trigger
+3. Command strip and search row
 4. Metrics overview row
 5. Fleet management plus automation controls
-6. Activity thread companion rail
+6. Inline notification tray anchored to the top-right bell
 
 This structure was chosen to stay close to the composition of `mockup.png`, which reads more like an operational control surface than a marketing page.
 
 The latest layout pass focused on three things:
 
-- keeping the command buttons and search field on one visual line on desktop
-- reducing dead air under the workspace heading so key surfaces start sooner
-- making the sidebar flow-health chart responsive within the fixed-width rail
+- replacing the colorful page backdrop with a near-black slate canvas and dotted texture
+- keeping cards gray while moving color into glows, icons, charts, toggles, and progress
+- removing descriptive scaffold copy so the interface reads as labels, values, and actions
 
 ## Interaction Model
 
@@ -71,6 +71,7 @@ The latest layout pass focused on three things:
 - button glow behavior follows Sparklebots interaction patterns
 - progress indicators and animated signal bars add motion without crowding the layout
 - the signal bar helper can now expand to fill its container instead of depending on fixed bar widths
+- alert visibility uses local `useState` and conditional rendering for the top-right tray
 
 ## Current Limitations
 

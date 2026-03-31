@@ -8,8 +8,8 @@ type StatusTone = "online" | "warning" | "offline";
 
 const toneMap: Record<StatusTone, { label: string; hex: string }> = {
   online: { label: "Online", hex: "#74f7b0" },
-  warning: { label: "Warm", hex: "#fbbf24" },
-  offline: { label: "Muted", hex: "#fb7185" },
+  warning: { label: "Warning", hex: "#fbbf24" },
+  offline: { label: "Offline", hex: "#fb7185" },
 };
 
 export function StatusPill({
@@ -23,7 +23,7 @@ export function StatusPill({
 
   return (
     <span
-      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/35 px-3 py-1 text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-white/72"
+      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-[#090c10]/88 px-3 py-1 text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-white/72"
       style={
         {
           boxShadow: `inset 0 0 0 1px ${palette.hex}20`,
@@ -79,14 +79,14 @@ export function ShinyButton({
       onPointerMove={updateGlow}
       className={`group relative overflow-hidden rounded-[22px] border px-4 py-3 text-left transition duration-300 hover:-translate-y-0.5 ${
         subtle
-          ? "border-white/10 bg-white/[0.04]"
-          : "border-white/14 bg-white/[0.07]"
+          ? "border-white/10 bg-[#0e1218]/92"
+          : "border-white/12 bg-[#11161d]/94"
       } ${className}`}
       style={
         {
           boxShadow: subtle
-            ? `0 18px 50px ${hex}18`
-            : `0 24px 80px -30px ${hex}72`,
+            ? `0 18px 50px -36px ${hex}88`
+            : `0 22px 70px -34px ${hex}92`,
         } satisfies CSSProperties
       }
     >
@@ -103,15 +103,15 @@ export function ShinyButton({
         style={
           {
             background: subtle
-              ? "linear-gradient(180deg, rgba(8, 10, 18, 0.88), rgba(10, 12, 20, 0.68))"
-              : "linear-gradient(180deg, rgba(14, 16, 26, 0.92), rgba(8, 10, 18, 0.75))",
+              ? "linear-gradient(180deg, rgba(17, 22, 29, 0.94), rgba(12, 16, 22, 0.88))"
+              : "linear-gradient(180deg, rgba(19, 24, 32, 0.96), rgba(12, 16, 22, 0.92))",
           } satisfies CSSProperties
         }
       />
       <span className="relative flex items-center gap-3">
         {Icon ? (
           <span
-            className="grid size-10 place-items-center rounded-2xl border border-white/8 bg-white/[0.05] text-white/70 transition duration-300 group-hover:text-white"
+            className="grid size-10 place-items-center rounded-2xl border border-white/8 bg-black/18 text-white/70 transition duration-300 group-hover:text-white"
             style={
               {
                 boxShadow: `0 0 24px ${hex}22`,
@@ -141,15 +141,15 @@ export function SugarCard({
   value: string;
   hex: string;
   icon: LucideIcon;
-  detail: string;
+  detail?: string;
   status?: StatusTone;
 }) {
   return (
     <article
-      className="group relative overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.055] p-5 backdrop-blur-2xl transition duration-300 hover:-translate-y-1"
+      className="group relative h-full overflow-hidden rounded-[28px] border border-white/10 bg-[#0f141b]/94 p-5 backdrop-blur-2xl transition duration-300 hover:-translate-y-1"
       style={
         {
-          boxShadow: `0 25px 80px -42px ${hex}88`,
+          boxShadow: `0 26px 84px -48px ${hex}88`,
         } satisfies CSSProperties
       }
     >
@@ -160,13 +160,13 @@ export function SugarCard({
         }}
       />
       <div className="relative flex items-start justify-between gap-4">
-        <div className="space-y-4">
+        <div className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/45">
             {title}
           </p>
           <div className="space-y-1">
             <p className="text-3xl font-semibold text-white">{value}</p>
-            <p className="text-sm text-white/52">{detail}</p>
+            {detail ? <p className="text-sm text-white/52">{detail}</p> : null}
           </div>
         </div>
         <div className="flex flex-col items-end gap-3">
@@ -205,7 +205,7 @@ export function CandyInput({
         className="pointer-events-none absolute -inset-0.5 rounded-[22px] opacity-0 blur-xl transition duration-300 group-focus-within:opacity-100"
         style={{ backgroundColor: `${hex}26` }}
       />
-      <span className="relative flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/30 px-4 py-3 backdrop-blur-xl">
+      <span className="relative flex items-center gap-3 rounded-[22px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 backdrop-blur-xl">
         <Search
           size={18}
           className="transition duration-300 group-focus-within:text-white"
@@ -234,13 +234,8 @@ export function SweetToggle({
   hex: string;
 }) {
   return (
-    <label className="flex items-center justify-between gap-4 rounded-[22px] border border-white/8 bg-black/18 px-4 py-4">
-      <div className="space-y-1">
-        <p className="text-sm font-medium text-white/90">{label}</p>
-        <p className="text-xs uppercase tracking-[0.22em] text-white/35">
-          {checked ? "Enabled" : "Paused"}
-        </p>
-      </div>
+    <label className="flex items-center justify-between gap-4 rounded-[22px] border border-white/8 bg-[#0f141b]/94 px-4 py-4">
+      <p className="text-sm font-medium text-white/90">{label}</p>
       <span className="relative inline-flex cursor-pointer items-center">
         <input
           type="checkbox"
@@ -283,7 +278,7 @@ export function HologramProgress({
   hex: string;
 }) {
   return (
-    <div className="space-y-3 rounded-[22px] border border-white/8 bg-black/18 p-4">
+    <div className="space-y-3 rounded-[22px] border border-white/8 bg-[#0f141b]/94 p-4">
       <div className="flex items-center justify-between gap-4">
         <span className="text-sm font-medium text-white/85">{label}</span>
         <span className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: hex }}>
@@ -331,13 +326,15 @@ export function SignalBars({
       {values.map((value, index) => (
         <span
           key={`${value}-${index}`}
-          className={`w-3 rounded-full bg-gradient-to-t from-fuchsia-500/35 via-violet-400/65 to-cyan-300/90 ${barClassName}`}
+          className={`w-3 rounded-full ${barClassName}`}
           style={
             {
               height: `${value}%`,
               animation: "bar-drift 3.4s ease-in-out infinite",
               animationDelay: `${index * 0.18}s`,
-              boxShadow: "0 0 28px rgba(125, 211, 252, 0.22)",
+              background:
+                "linear-gradient(180deg, rgba(34,211,238,0.96) 0%, rgba(116,247,176,0.92) 28%, rgba(251,191,36,0.86) 56%, rgba(236,72,153,0.82) 82%, rgba(139,92,246,0.74) 100%)",
+              boxShadow: "0 0 28px rgba(148, 163, 184, 0.2)",
             } satisfies CSSProperties
           }
         />

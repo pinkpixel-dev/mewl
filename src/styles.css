@@ -4,13 +4,13 @@
 :root {
   font-family: "Plus Jakarta Sans", sans-serif;
   color: rgba(255, 255, 255, 0.94);
-  background-color: #05060b;
+  background-color: #07090d;
   color-scheme: dark;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  --mewl-bg: rgba(8, 10, 18, 0.74);
-  --mewl-border: rgba(255, 255, 255, 0.08);
+  --mewl-bg: rgba(12, 16, 22, 0.92);
+  --mewl-border: rgba(255, 255, 255, 0.07);
 }
 
 @theme inline {
@@ -31,10 +31,8 @@ body,
 body {
   margin: 0;
   background:
-    radial-gradient(circle at top left, rgba(236, 72, 153, 0.2), transparent 28%),
-    radial-gradient(circle at top right, rgba(139, 92, 246, 0.18), transparent 24%),
-    radial-gradient(circle at bottom left, rgba(34, 211, 238, 0.08), transparent 18%),
-    #05060b;
+    linear-gradient(180deg, rgba(14, 18, 24, 0.65), rgba(7, 9, 13, 0.98)),
+    #07090d;
 }
 
 body::before,
@@ -48,14 +46,14 @@ body::after {
 
 body::before {
   background:
-    radial-gradient(circle, rgba(255, 255, 255, 0.11) 0 1px, transparent 1.6px) 0 0 / 18px 18px,
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 34%);
-  opacity: 0.28;
+    radial-gradient(circle, rgba(255, 255, 255, 0.09) 0 1px, transparent 1.5px) 0 0 / 18px 18px,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 36%);
+  opacity: 0.22;
 }
 
 body::after {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.22'/%3E%3C/svg%3E");
-  opacity: 0.08;
+  opacity: 0.06;
   mix-blend-mode: soft-light;
 }
 
@@ -69,7 +67,7 @@ body::after {
   inset: 8% 28% auto 14%;
   height: 22rem;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(236, 72, 153, 0.18), transparent 62%);
+  background: radial-gradient(circle, rgba(148, 163, 184, 0.08), transparent 62%);
   filter: blur(50px);
   pointer-events: none;
 }
@@ -78,11 +76,11 @@ body::after {
   position: relative;
   border: 1px solid var(--mewl-border);
   background:
-    linear-gradient(180deg, rgba(18, 21, 34, 0.74), rgba(9, 11, 20, 0.62)),
-    rgba(255, 255, 255, 0.03);
+    linear-gradient(180deg, rgba(18, 23, 30, 0.94), rgba(11, 14, 20, 0.9)),
+    rgba(255, 255, 255, 0.02);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 32px 120px -48px rgba(0, 0, 0, 0.92);
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 32px 120px -56px rgba(0, 0, 0, 0.96);
   backdrop-filter: blur(26px);
   -webkit-backdrop-filter: blur(26px);
 }
@@ -92,12 +90,12 @@ body::after {
   position: absolute;
   inset: 1px;
   border-radius: inherit;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 22%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%);
   pointer-events: none;
 }
 
 ::selection {
-  background: rgba(236, 72, 153, 0.28);
+  background: rgba(148, 163, 184, 0.24);
   color: white;
 }
 

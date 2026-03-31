@@ -107,3 +107,4 @@ The current product direction is intentionally utility-first rather than dashboa
 - `mockup.png` remains the visual reference image in the repository.
 - `public/icon.png` is used by the app shell and browser tab.
 - The current implementation is a polished local-ops foundation with mock runtime data and no native system bridge yet.
+- The notifications tray is layered above the dashboard surfaces so alerts stay readable when opened from the top command bar.

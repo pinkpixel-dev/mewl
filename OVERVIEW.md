@@ -95,6 +95,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - button glow behavior follows Sparklebots interaction patterns
 - progress indicators and animated signal bars add motion without crowding the layout
 - alert visibility uses local `useState` and conditional rendering for the top-right tray
+- the top command bar now owns a higher stacking layer so the alerts tray stays above the dashboard cards
 
 ## Current Limitations
 

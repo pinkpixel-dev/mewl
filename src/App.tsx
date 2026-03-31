@@ -1236,7 +1236,7 @@ function App() {
         </aside>
 
         <main className="flex min-w-0 flex-col gap-4">
-          <section className={`${panelClass} p-4 sm:p-5`}>
+          <section className={`${panelClass} relative z-20 p-4 sm:p-5`}>
             <div className="flex flex-wrap items-center gap-3">
               <div className="min-w-[280px] flex-1">
                 <CandyInput
@@ -1298,7 +1298,7 @@ function App() {
                 </button>
 
                 {alertsOpen ? (
-                  <div className="absolute right-0 top-[calc(100%+0.85rem)] z-30 w-[360px] rounded-[26px] border border-white/8 bg-[#0c1015]/96 p-3 shadow-[0_34px_90px_-42px_rgba(0,0,0,0.96)] backdrop-blur-2xl">
+                  <div className="absolute right-0 top-[calc(100%+0.85rem)] z-50 w-[360px] rounded-[26px] border border-white/8 bg-[#0c1015]/96 p-3 shadow-[0_34px_90px_-42px_rgba(0,0,0,0.96)] backdrop-blur-2xl">
                     {renderAlertFeed()}
                   </div>
                 ) : null}

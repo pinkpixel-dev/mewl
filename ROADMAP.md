@@ -22,6 +22,7 @@
 - [x] Build expandable three-column process cards for the dedicated Processes page
 - [x] Add focused workspace modes for overview, processes, ports, monitor, and automation
 - [x] Add a collapsible sidebar with host snapshot details
+- [x] Keep the notifications tray readable above the dashboard surfaces
 - [x] Move the dev server off `5173` to a dedicated fixed port (`29463`)
 - [ ] Add per-process log tails and structured stdout/stderr panes
 - [ ] Add empty, loading, and error states for future live runtime sources

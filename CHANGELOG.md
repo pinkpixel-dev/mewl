@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 06:05 EDT
+
+- raised the top command bar and alerts tray stacking order so the notifications popover stays readable above the dashboard cards
+
 ## 2026-03-31 05:58 EDT
 
 - removed the large dashboard banner copy and extra sidebar subtitle to keep the shell cleaner and more utility-focused

@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 06:54 EDT
+
+- chose Electron as Mewl's native host integration layer and documented the decision across the roadmap and technical docs
+- added `src/runtime/provider.ts` so the renderer now hydrates through a runtime-source boundary instead of calling the mock boot helpers directly
+- typed a future `window.mewlHost` preload bridge in `src/vite-env.d.ts` so the app can adopt an Electron preload API without reshaping the UI contract
+- updated `index.html` metadata to describe Mewl as a local ops cockpit instead of the older server-manager scaffold wording
+- revalidated the application with a successful `npm run build`
+
 ## 2026-03-31 06:33 EDT
 
 - hydrated the workspace from the runtime contract on boot and persisted local session state for views, filters, selected process, expanded cards, alerts, and automation changes

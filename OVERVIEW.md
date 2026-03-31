@@ -4,6 +4,8 @@
 
 Mewl is a local process and port management app for Pink Pixel. This pass pushes the project from a visual scaffold into a more functional product shell by restoring workspace state, surfacing structured process logs, and handling runtime loading and failure states more deliberately.
 
+The latest iteration also chooses Electron as the native host direction and introduces a runtime-provider seam so the renderer no longer depends directly on the mock boot helpers.
+
 ## Technical Summary
 
 - Framework: React 19
@@ -63,6 +65,17 @@ Holds the mock runtime model that currently powers the interface:
 
 This file is the current contract surface for the future backend/native adapter.
 
+### `src/runtime/provider.ts`
+
+Defines the runtime source boundary that the renderer now uses for hydration and reset flows.
+
+The provider currently:
+
+- falls back to the mock runtime contract in the browser build
+- detects a future `window.mewlHost` preload bridge when Mewl is hosted inside Electron
+- documents Electron as the chosen host layer for process control, port discovery, host metrics, and secure command execution
+- keeps the UI-facing `RuntimeSnapshot` contract stable while the native bridge is implemented
+
 ### `src/styles.css`
 
 Holds the visual system outside component logic:
@@ -106,6 +119,7 @@ This structure keeps the app close to the original mockup mood while making the 
 ## Current Limitations
 
 - no native process bridge yet, so OS process control is not live
+- Electron is chosen as the host layer, but the preload API and main-process handlers still need to be implemented
 - no real port inspection or system telemetry ingestion
 - no auth, multi-user roles, or workspace sync
 - no testing suite yet
@@ -113,7 +127,8 @@ This structure keeps the app close to the original mockup mood while making the 
 
 ## Extension Points
 
-- replace the mock runtime file with a real adapter backed by Electron, Tauri, or a local daemon
+- replace the browser fallback path with the real Electron-backed adapter exposed through the runtime provider
+- implement the Electron preload and main-process bridge behind the runtime provider
 - wire lifecycle actions to spawn, kill, restart, and inspect real processes
 - add live port discovery and collision detection from the host machine
 - persist workspace profiles, startup groups, and automation presets beyond the single local session model

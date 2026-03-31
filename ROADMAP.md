@@ -30,11 +30,16 @@
 
 ## Phase 3: Native Runtime Bridge
 
-- [ ] Choose the host integration layer: Electron, Tauri, or a local daemon/API
+- [x] Choose the host integration layer: Electron, Tauri, or a local daemon/API
 - [ ] Replace mock lifecycle actions with real process spawning and termination
 - [ ] Discover live ports and reconcile them against reserved bindings
 - [ ] Pull real CPU, memory, disk, and network metrics from the host system
 - [ ] Add permission-safe command execution and process environment handling
+
+### Phase 3 Notes
+
+- Electron is the selected host layer for the native bridge.
+- The renderer now loads runtime state through `src/runtime/provider.ts`, which preserves the current mock source while defining the future Electron preload seam.
 
 ## Phase 4: Monitoring and Automation
 

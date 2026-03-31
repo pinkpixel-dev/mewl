@@ -14,6 +14,7 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Review a port registry with exposure, conflict, and watched-binding states
 - Track host CPU, memory, disk, and network pressure from the sidebar and monitor view
 - Recover gracefully with loading, empty, and error states while the workspace runtime hydrates
+- Route runtime hydration through a provider layer that can fall back to mock data or swap to a native host bridge
 - Collapse the sidebar when you want more room for the main workspace
 - Use a dedicated Vite dev port at `29463` instead of the default `5173`
 
@@ -30,9 +31,10 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 This is the first real product pass, not the final native implementation yet.
 
 - The UI now hydrates from a mock front-end runtime model in [`src/data/runtime.ts`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/src/data/runtime.ts) and restores saved workspace state from local storage.
+- Runtime loading now flows through [`src/runtime/provider.ts`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/src/runtime/provider.ts), which keeps the current mock contract in place while preparing for a native host bridge.
 - Lifecycle actions update the mock process model, alerts feed, and structured log tails, so the cockpit behaves more like a real app even before a native bridge exists.
-- Real OS process launching, killing, port discovery, and machine telemetry will require a local bridge layer such as Electron, Tauri, or a small local daemon/API.
-- The app is already structured around that future workflow, so the next step is wiring the current actions to a real runtime adapter.
+- Electron is the chosen host integration layer for the native bridge because it keeps the renderer, preload contract, and runtime orchestration in the same TypeScript stack.
+- Real OS process launching, killing, port discovery, and machine telemetry still need to be implemented behind the Electron preload bridge.
 
 ## Run Locally
 
@@ -71,6 +73,9 @@ npm run preview
 |   |   `-- ui.tsx
 |   |-- data/
 |   |   `-- runtime.ts
+|   |-- runtime/
+|   |   |-- index.ts
+|   |   `-- provider.ts
 |   |-- App.tsx
 |   |-- main.tsx
 |   |-- styles.css
@@ -96,6 +101,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - dedicated Processes page with expandable cards and a full-width inspector
 - dedicated Ports and Monitor pages for deeper operational detail
 - structured process logs and session memory so the shell feels more like a real local cockpit
+- a runtime source abstraction that keeps the mock snapshot and a future Electron bridge behind the same UI-facing contract
 - Pink Pixel branding applied without turning the app into a generic purple SaaS grid
 
 ## Brand
@@ -112,4 +118,5 @@ The current product direction is intentionally utility-first rather than dashboa
 - `mockup.png` remains the visual reference image in the repository.
 - `public/icon.png` is used by the app shell and browser tab.
 - The current implementation is a polished local-ops foundation with mock runtime data, persisted workspace state, and no native system bridge yet.
+- Electron is now the documented native-host target, but the repo still ships as a web build until the preload and main-process bridge lands.
 - The notifications tray is layered above the dashboard surfaces so alerts stay readable when opened from the top command bar.

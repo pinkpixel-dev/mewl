@@ -50,9 +50,13 @@ import {
   type PortStatus,
   type ProcessStatus,
   type WorkspaceView,
-  createInitialRuntimeSnapshot,
-  hydrateMockRuntime,
 } from "./data/runtime";
+import {
+  chosenHostLayer,
+  createDefaultRuntimeSnapshot,
+  getRuntimeSourceDescriptor,
+  hydrateRuntimeSnapshot,
+} from "./runtime";
 
 type StatusFilter = "all" | "active" | "watching" | "issues";
 type RuntimeStatus = "loading" | "ready" | "error";
@@ -237,6 +241,7 @@ function App() {
   const [automationRules, setAutomationRules] = useState<AutomationRule[]>([]);
   const [commandState, setCommandState] = useState(defaultCommandState);
   const [isPending, startActionTransition] = useTransition();
+  const runtimeSource = getRuntimeSourceDescriptor();
 
   useEffect(() => {
     let cancelled = false;
@@ -246,7 +251,7 @@ function App() {
       setRuntimeError(null);
 
       try {
-        const snapshot = await hydrateMockRuntime();
+        const snapshot = await hydrateRuntimeSnapshot();
         if (cancelled) {
           return;
         }
@@ -436,27 +441,27 @@ function App() {
         : "starting";
 
   const restoreDefaultWorkspace = () => {
-    const snapshot = createInitialRuntimeSnapshot();
+    void createDefaultRuntimeSnapshot().then((snapshot) => {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(workspaceStorageKey);
+      }
 
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(workspaceStorageKey);
-    }
-
-    setProcesses(snapshot.processes);
-    setPorts(snapshot.ports);
-    setAlerts(snapshot.alerts);
-    setMonitorMetrics(snapshot.monitorMetrics);
-    setAutomationRules(snapshot.automationRules);
-    setCommandState(defaultCommandState);
-    setActiveView("overview");
-    setQuery("");
-    setStatusFilter("all");
-    setSidebarCollapsed(false);
-    setSelectedProcessId(snapshot.processes[0]?.id ?? "");
-    setExpandedProcessIds([]);
-    setAlertsOpen(false);
-    setRuntimeError(null);
-    setRuntimeStatus("ready");
+      setProcesses(snapshot.processes);
+      setPorts(snapshot.ports);
+      setAlerts(snapshot.alerts);
+      setMonitorMetrics(snapshot.monitorMetrics);
+      setAutomationRules(snapshot.automationRules);
+      setCommandState(defaultCommandState);
+      setActiveView("overview");
+      setQuery("");
+      setStatusFilter("all");
+      setSidebarCollapsed(false);
+      setSelectedProcessId(snapshot.processes[0]?.id ?? "");
+      setExpandedProcessIds([]);
+      setAlertsOpen(false);
+      setRuntimeError(null);
+      setRuntimeStatus("ready");
+    });
   };
 
   const createProcessLogEntry = (level: ProcessLogLevel, text: string): ProcessLogEntry => ({
@@ -1675,6 +1680,25 @@ function App() {
           <p className="text-sm font-medium text-white/84">Latest command state</p>
           <p className="mt-2 text-sm text-white/54">{commandState}</p>
         </div>
+        <div className="mt-4 rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-white/84">Runtime source</p>
+              <p className="mt-2 text-sm text-white/54">{runtimeSource.detail}</p>
+            </div>
+            <StatusPill
+              tone={runtimeSource.availability === "active" ? "online" : "starting"}
+              label={runtimeSource.badgeLabel}
+            />
+          </div>
+          <div className="mt-4 rounded-[20px] border border-white/8 bg-black/18 px-4 py-4">
+            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+              Chosen host layer
+            </p>
+            <p className="mt-2 text-sm font-semibold text-white/88">{chosenHostLayer.label}</p>
+            <p className="mt-2 text-sm text-white/54">{chosenHostLayer.summary}</p>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -1685,7 +1709,7 @@ function App() {
         eyebrow: "Runtime Source",
         title: "Hydrating the local workspace",
         detail:
-          "Mewl is restoring saved filters, process state, and the current mock runtime snapshot before the cockpit becomes interactive.",
+          `Mewl is restoring saved filters, process state, and the current ${runtimeSource.label.toLowerCase()} snapshot before the cockpit becomes interactive.`,
         hex: accent.cyan,
         icon: Terminal,
       });
@@ -1697,7 +1721,7 @@ function App() {
         title: "Workspace session could not be restored",
         detail:
           runtimeError ??
-          "The saved session data could not be read. Resetting the local workspace will rebuild the shell from the default mock runtime.",
+          "The saved session data could not be read. Resetting the local workspace will rebuild the shell from the default runtime source.",
         hex: accent.rose,
         icon: BellRing,
         actionLabel: "Reset Session",
@@ -1907,7 +1931,7 @@ function App() {
                 tone={runtimeIndicatorTone}
                 label={
                   runtimeStatus === "ready"
-                    ? "mock source"
+                    ? runtimeSource.badgeLabel
                     : runtimeStatus === "error"
                       ? "source error"
                       : "hydrating"

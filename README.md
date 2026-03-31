@@ -1,6 +1,6 @@
 # Mewl
 
-Mewl is a local operations cockpit for Pink Pixel. The current app turns the original dashboard scaffold into a process-oriented control surface for managing running services, watched ports, quick lifecycle actions, and host pressure from one workspace.
+Mewl is a local operations cockpit for managing running services, watched ports, quick lifecycle actions, and host pressure from one workspace.
 
 ## What It Does Today
 

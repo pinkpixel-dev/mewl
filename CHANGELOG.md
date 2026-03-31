@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 08:43 EDT
+
+- tightened the Processes page cards by removing long command text from the collapsed state
+- moved the full command and working directory details into the expanded process panel so uneven cards no longer stretch the whole grid
+- refreshed the README, overview, and roadmap to document the cleaner process-card layout
+
 ## 2026-03-31 08:40 EDT
 
 - changed the Electron main window shutdown flow so closing the app quits the process cleanly instead of leaving the desktop dev shell running in the background

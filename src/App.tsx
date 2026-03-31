@@ -1459,8 +1459,6 @@ function App() {
                   <StatusPill tone={processToneMap[process.status]} label={process.status} />
                 </div>
 
-                <p className="mt-4 text-sm text-white/54">{process.command}</p>
-
                 <div className="mt-5 grid grid-cols-3 gap-3 text-sm">
                   <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-3">
                     <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">Runtime</p>
@@ -1491,6 +1489,11 @@ function App() {
               {isExpanded ? (
                 <div className="mt-5 space-y-4 border-t border-white/8 pt-5">
                   <p className="text-sm text-white/56">{process.description}</p>
+                  <div className="rounded-[20px] border border-white/8 bg-black/18 px-4 py-4">
+                    <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">Command</p>
+                    <p className="mt-3 break-all font-mono text-sm text-white/80">{process.command}</p>
+                    <p className="mt-3 break-all font-mono text-xs text-white/42">{process.cwd}</p>
+                  </div>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-3">
                       <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">Uptime</p>

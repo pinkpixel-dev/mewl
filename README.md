@@ -132,6 +132,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - the shared search field now uses the Pink Pixel rose accent for its icon and focus glow
 - clean overview dashboard with summary cards and short preview lists instead of oversized explainer surfaces
 - dedicated Processes page with expandable cards and a full-width inspector
+- collapsed process cards now stay compact, with long command and path details moved into the expanded state
 - dedicated Ports and Monitor pages for deeper operational detail
 - structured process logs and session memory so the shell feels more like a real local cockpit
 - a runtime source abstraction that boots only when the Electron bridge is available

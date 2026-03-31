@@ -30,6 +30,7 @@ The current implementation includes:
 - a rose-accented shared search field that matches the Pink Pixel brand color
 - a clean dashboard made of summary cards plus short process and port preview lists
 - a dedicated Processes page with expandable cards and a full inspector surface
+- a collapsed process-card layout that keeps the grid tidy by moving long command text into the expanded panel
 - view-specific pages for port registry, monitor, and automation workflows
 - a ports registry table with a wider target column and wrapping behavior for longer bind addresses
 - local state transitions that coordinate with the live Electron runtime bridge

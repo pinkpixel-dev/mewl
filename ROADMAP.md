@@ -29,6 +29,7 @@
 - [x] Persist filters, selected views, and workspace preferences
 - [x] Tune the Ports registry column sizing so longer target bindings stay readable
 - [x] Align the shared search field accent with the Pink Pixel rose brand color
+- [x] Move long process command text into the expanded card state to keep the grid compact
 
 ## Phase 3: Native Runtime Bridge
 

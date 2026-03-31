@@ -5,7 +5,8 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 ## What It Does Today
 
 - Search a managed local runtime made up of services, workers, tooling, and data processes
-- Start, stop, restart, and scan the selected service from a compact top command strip
+- Scan the live workspace from a compact top command strip
+- Start, stop, and restart managed services directly from process cards and the full inspector where the service context is visible
 - Persist workspace state across refreshes, including the active view, filters, sidebar state, selected process, expanded cards, alerts, and automation toggles
 - Use a cleaner overview dashboard with summary cards plus side-by-side process and port previews
 - Jump from dashboard previews into dedicated Processes and Ports pages with `See all` actions
@@ -16,6 +17,7 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Update managed `autostart` and `watch ports` settings from the UI and persist them back to `mewl.services.json`
 - Boot managed startup profiles and quiet-mode presets through the Electron Automation view
 - Launch managed services through a hardened Electron runner with explicit env inheritance, workspace-bound cwd checks, PATH resolution, and reserved-port guards
+- Reattach orphaned managed services that are already running on the host so lifecycle actions can reclaim and control them cleanly
 - Review a port registry with exposure, conflict, and watched-binding states
 - Track host CPU, memory, disk, network, and GPU pressure from the sidebar and monitor view
 - Recover gracefully with loading, empty, and error states while the workspace runtime hydrates
@@ -128,10 +130,12 @@ Managed service launches are now intentionally strict: Mewl resolves a single ex
 The current product direction is intentionally utility-first rather than dashboard wallpaper:
 
 - collapsible left navigation rail for overview, processes, ports, monitor, and automation
-- compact operational header with lifecycle actions, search, and alert tray instead of hero copy
+- compact operational header with search, scan, and alert tray instead of hero copy
 - the shared search field now uses the Pink Pixel rose accent for its icon and focus glow
 - clean overview dashboard with summary cards and short preview lists instead of oversized explainer surfaces
 - dedicated Processes page with expandable cards and a full-width inspector
+- process cards now carry their own lifecycle controls instead of depending on distant header buttons
+- process surfaces now label each entry as `managed` or `observed` without extra explanatory filler on observed cards
 - collapsed process cards now stay compact, with long command and path details moved into the expanded state
 - dedicated Ports and Monitor pages for deeper operational detail
 - GPU telemetry folded into the host monitor and sidebar health card, with graceful fallback when the host bridge cannot read GPU data

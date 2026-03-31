@@ -30,6 +30,8 @@ The current implementation includes:
 - a rose-accented shared search field that matches the Pink Pixel brand color
 - a clean dashboard made of summary cards plus short process and port preview lists
 - a dedicated Processes page with expandable cards and a full inspector surface
+- process-level lifecycle controls directly on process cards plus the inspector so service actions stay close to the process being operated
+- explicit `managed` and `observed` ownership tags on process surfaces without extra warning copy cluttering the cards
 - a collapsed process-card layout that keeps the grid tidy by moving long command text into the expanded panel
 - view-specific pages for port registry, monitor, and automation workflows
 - a cleaner Automation page that surfaces latest activity and runtime source inline instead of keeping a bulky secondary state column
@@ -93,6 +95,7 @@ The current implementation:
 - maps the live host snapshot into the existing renderer-facing `RuntimeSnapshot` shape
 - loads `mewl.services.json` and manages only the services explicitly registered there
 - starts, stops, and restarts managed services through child-process ownership in the Electron main process
+- reattaches matching managed services that are already running on the host so stop and restart still work after Mewl reconnects
 - persists managed `autoStart` and `watchPorts` changes back into `mewl.services.json` through the preload bridge
 - applies enabled startup profiles on Electron boot and lets the Automation view trigger grouped start/stop presets
 - validates managed commands before spawn by requiring a single executable token, a workspace-safe cwd, an explicit inherited environment, and available reserved ports
@@ -132,7 +135,7 @@ The current app is organized into six major workspace zones:
 
 1. Left navigation rail
 2. Sidebar host health plus compact machine snapshot
-3. Workspace header with alert tray and lifecycle actions
+3. Workspace header with search, scan, and alert tray
 4. Overview summary cards
 5. Dashboard preview panels for processes and port bindings
 6. Dedicated full pages for processes, ports, monitoring, and automation

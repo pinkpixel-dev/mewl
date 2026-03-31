@@ -57,6 +57,7 @@ import {
 
 type StatusFilter = "all" | "active" | "watching" | "issues";
 type RuntimeStatus = "loading" | "ready" | "error";
+type ProcessAction = "start" | "stop" | "restart" | "scan";
 
 type PersistedWorkspaceState = {
   version: 1;
@@ -125,6 +126,15 @@ const processTextClassMap: Record<ProcessStatus, string> = {
   degraded: "text-amber-200",
   stopped: "text-rose-200",
   starting: "text-cyan-200",
+};
+
+const lifecycleActionMeta: Record<
+  Exclude<ProcessAction, "scan">,
+  { label: string; hex: string; icon: typeof Play }
+> = {
+  start: { label: "Start", hex: accent.green, icon: Play },
+  stop: { label: "Stop", hex: accent.rose, icon: Square },
+  restart: { label: "Restart", hex: accent.purple, icon: RefreshCw },
 };
 
 const severityToneMap: Record<AlertSeverity, "online" | "warning" | "offline"> = {
@@ -419,8 +429,8 @@ function App() {
     filteredProcesses[0] ??
     processes[0] ??
     null;
-  const canControlSelectedProcess =
-    runtimeStatus === "ready" && Boolean(selectedProcess) && Boolean(selectedProcess?.managed);
+  const canControlProcess = (process: ManagedProcess | null) =>
+    runtimeStatus === "ready" && Boolean(process?.managed);
 
   const selectedPorts = selectedProcess
     ? ports.filter((port) => port.serviceId === selectedProcess.id)
@@ -576,10 +586,15 @@ function App() {
     );
   };
 
-  const handleProcessAction = (action: "start" | "stop" | "restart" | "scan") => {
+  const handleProcessAction = (
+    action: ProcessAction,
+    processOverride?: ManagedProcess | null,
+  ) => {
     if (runtimeStatus !== "ready") {
       return;
     }
+
+    const targetProcess = processOverride ?? selectedProcess;
 
     if (isLiveElectronRuntime) {
       const hostAction = window.mewlHost?.performProcessAction;
@@ -589,7 +604,7 @@ function App() {
         return;
       }
 
-      if (action !== "scan" && !selectedProcess?.managed) {
+      if (action !== "scan" && !targetProcess?.managed) {
         setCommandState(
           "Only services registered in mewl.services.json can be started, stopped, or restarted.",
         );
@@ -605,13 +620,16 @@ function App() {
                 : action === "stop"
                   ? "Stopping"
                   : "Restarting"
-            } ${selectedProcess?.name ?? "service"} from the Electron bridge.`,
+            } ${targetProcess?.name ?? "service"} from the Electron bridge.`,
       );
 
       startActionTransition(async () => {
         try {
-          const result: RuntimeActionResult = await hostAction(action, selectedProcess?.id ?? "");
+          const result: RuntimeActionResult = await hostAction(action, targetProcess?.id ?? "");
           applyRuntimeActionResult(result);
+          if (targetProcess) {
+            setSelectedProcessId(targetProcess.id);
+          }
         } catch (error) {
           setCommandState(
             error instanceof Error ? error.message : "The Electron bridge could not complete that action.",
@@ -625,8 +643,8 @@ function App() {
     if (action === "scan") {
       setCommandState("Scanning watched bindings and reserved ranges.");
 
-      if (selectedProcess) {
-        appendProcessLogs(selectedProcess.id, [
+      if (targetProcess) {
+        appendProcessLogs(targetProcess.id, [
           {
             ...createProcessLogEntry("debug", "Port scan requested from the command strip."),
             stream: "stdout",
@@ -637,8 +655,8 @@ function App() {
       startActionTransition(async () => {
         await delay(320);
 
-        if (selectedProcess) {
-          appendProcessLogs(selectedProcess.id, [
+        if (targetProcess) {
+          appendProcessLogs(targetProcess.id, [
             conflictCount > 0
               ? {
                   ...createProcessLogEntry(
@@ -675,32 +693,32 @@ function App() {
       return;
     }
 
-    if (!selectedProcess) {
+    if (!targetProcess) {
       return;
     }
 
-    if (action === "start" && selectedProcess.status === "running") {
-      setCommandState(`${selectedProcess.name} is already live.`);
+    if (action === "start" && targetProcess.status === "running") {
+      setCommandState(`${targetProcess.name} is already live.`);
       pushAlert({
         title: "No launch needed",
-        detail: `${selectedProcess.name} was already running when the launch command was issued.`,
+        detail: `${targetProcess.name} was already running when the launch command was issued.`,
         severity: "info",
         stamp: "now",
       });
       return;
     }
 
-    if (action === "stop" && selectedProcess.status === "stopped") {
-      setCommandState(`${selectedProcess.name} is already stopped.`);
+    if (action === "stop" && targetProcess.status === "stopped") {
+      setCommandState(`${targetProcess.name} is already stopped.`);
       return;
     }
 
-    const nextPid = (selectedProcess.pid ?? 4200) + 17;
+    const nextPid = (targetProcess.pid ?? 4200) + 17;
     const processConflictCount = ports.filter(
-      (port) => port.serviceId === selectedProcess.id && port.status === "conflict",
+      (port) => port.serviceId === targetProcess.id && port.status === "conflict",
     ).length;
 
-    appendProcessLogs(selectedProcess.id, [
+    appendProcessLogs(targetProcess.id, [
       {
         ...createProcessLogEntry(
           action === "restart" ? "warning" : "info",
@@ -716,16 +734,16 @@ function App() {
 
     setCommandState(
       action === "start"
-        ? `Starting ${selectedProcess.name}...`
+        ? `Starting ${targetProcess.name}...`
         : action === "stop"
-          ? `Stopping ${selectedProcess.name}...`
-          : `Restarting ${selectedProcess.name}...`,
+          ? `Stopping ${targetProcess.name}...`
+          : `Restarting ${targetProcess.name}...`,
     );
 
     startActionTransition(async () => {
       setProcesses((current) =>
         current.map((process) => {
-          if (process.id !== selectedProcess.id) {
+          if (process.id !== targetProcess.id) {
             return process;
           }
 
@@ -755,7 +773,7 @@ function App() {
 
       setPorts((current) =>
         current.map((port) =>
-          port.serviceId === selectedProcess.id
+          port.serviceId === targetProcess.id
             ? {
                 ...port,
                 status: action === "stop" ? "standby" : "booting",
@@ -768,7 +786,7 @@ function App() {
 
       setProcesses((current) =>
         current.map((process) => {
-          if (process.id !== selectedProcess.id) {
+          if (process.id !== targetProcess.id) {
             return process;
           }
 
@@ -799,7 +817,7 @@ function App() {
 
       setPorts((current) =>
         current.map((port) =>
-          port.serviceId === selectedProcess.id
+          port.serviceId === targetProcess.id
             ? {
                 ...port,
                 status: action === "stop" ? "standby" : "bound",
@@ -808,7 +826,7 @@ function App() {
         ),
       );
 
-      appendProcessLogs(selectedProcess.id, [
+      appendProcessLogs(targetProcess.id, [
         {
           ...createProcessLogEntry(
             "info",
@@ -836,10 +854,10 @@ function App() {
       pushAlert({
         title:
           action === "start"
-            ? `${selectedProcess.name} launched`
+            ? `${targetProcess.name} launched`
             : action === "stop"
-              ? `${selectedProcess.name} stopped`
-              : `${selectedProcess.name} restarted`,
+              ? `${targetProcess.name} stopped`
+              : `${targetProcess.name} restarted`,
         detail:
           action === "start"
             ? "Service boot completed and watched ports were rebound."
@@ -851,13 +869,42 @@ function App() {
       });
       setCommandState(
         action === "start"
-          ? `${selectedProcess.name} is running.`
+          ? `${targetProcess.name} is running.`
           : action === "stop"
-            ? `${selectedProcess.name} is stopped.`
-            : `${selectedProcess.name} restart completed.`,
+            ? `${targetProcess.name} is stopped.`
+            : `${targetProcess.name} restart completed.`,
       );
     });
   };
+
+  const renderLifecycleControls = (process: ManagedProcess, compact = false) => (
+    <div className={`grid gap-2 ${compact ? "grid-cols-3" : "sm:grid-cols-3"}`}>
+      {(["start", "stop", "restart"] as const).map((action) => {
+        const { label, hex, icon } = lifecycleActionMeta[action];
+        return (
+          <ShinyButton
+            key={`${process.id}-${action}`}
+            label={label}
+            hex={hex}
+            icon={icon}
+            subtle
+            className={compact ? "px-3 py-2 [&_span.text-sm]:text-xs" : ""}
+            disabled={!canControlProcess(process) || isPending || runtimeStatus !== "ready"}
+            onClick={() => {
+              setSelectedProcessId(process.id);
+              handleProcessAction(action, process);
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+
+  const renderProcessOwnershipTag = (process: ManagedProcess) => (
+    <span className="rounded-full border border-white/8 bg-black/18 px-3 py-1 text-[0.68rem] uppercase tracking-[0.2em] text-white/48">
+      {process.managed ? "managed" : "observed"}
+    </span>
+  );
 
   const toggleRule = (ruleId: string, nextValue: boolean) => {
     const rule = automationRules.find((item) => item.id === ruleId);
@@ -1004,15 +1051,19 @@ function App() {
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <StatusPill tone={processToneMap[selectedProcess.status]} label={selectedProcess.status} />
-          <span className="rounded-full border border-white/8 bg-black/18 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/48">
-            {selectedProcess.managed ? "managed" : "observed"}
-          </span>
+          {renderProcessOwnershipTag(selectedProcess)}
           <span className="rounded-full border border-white/8 bg-black/18 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/48">
             pid {selectedProcess.pid ?? "none"}
           </span>
         </div>
 
         <p className="mt-4 text-sm text-white/56">{selectedProcess.description}</p>
+
+        {selectedProcess.managed ? (
+          <div className="mt-5">
+            {renderLifecycleControls(selectedProcess)}
+          </div>
+        ) : null}
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
@@ -1306,7 +1357,10 @@ function App() {
                         {process.command}
                       </p>
                     </div>
-                    <StatusPill tone={processToneMap[process.status]} label={process.status} />
+                    <div className="flex flex-col items-end gap-2">
+                      <StatusPill tone={processToneMap[process.status]} label={process.status} />
+                      {renderProcessOwnershipTag(process)}
+                    </div>
                   </div>
                   <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
                     <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-3">
@@ -1324,6 +1378,14 @@ function App() {
                       <p className="mt-2 text-white/84">{process.memory} MB</p>
                     </div>
                   </div>
+                  {process.managed ? (
+                    <div
+                      className="mt-4"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {renderLifecycleControls(process, true)}
+                    </div>
+                  ) : null}
                 </button>
               ))
             ) : (
@@ -1472,7 +1534,10 @@ function App() {
                     <p className="text-xs uppercase tracking-[0.22em] text-white/34">{process.group}</p>
                     <h3 className="mt-2 text-xl font-semibold text-white">{process.name}</h3>
                   </div>
-                  <StatusPill tone={processToneMap[process.status]} label={process.status} />
+                  <div className="flex flex-col items-end gap-2">
+                    <StatusPill tone={processToneMap[process.status]} label={process.status} />
+                    {renderProcessOwnershipTag(process)}
+                  </div>
                 </div>
 
                 <div className="mt-5 grid grid-cols-3 gap-3 text-sm">
@@ -1501,6 +1566,12 @@ function App() {
                 {isExpanded ? "Collapse" : "Expand"}
                 {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </button>
+
+              {process.managed ? (
+                <div className="mt-4">
+                  {renderLifecycleControls(process, true)}
+                </div>
+              ) : null}
 
               {isExpanded ? (
                 <div className="mt-5 space-y-4 border-t border-white/8 pt-5">
@@ -1750,7 +1821,10 @@ function App() {
                       </span>
                     </div>
                   </div>
-                  <StatusPill tone={processToneMap[process.status]} label={process.status} />
+                  <div className="flex flex-col items-end gap-2">
+                    <StatusPill tone={processToneMap[process.status]} label={process.status} />
+                    {renderProcessOwnershipTag(process)}
+                  </div>
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
                   <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-3">
@@ -2100,42 +2174,6 @@ function App() {
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <ShinyButton
-                  label="Start"
-                  hex={accent.green}
-                  icon={Play}
-                  disabled={
-                    !selectedProcess ||
-                    isPending ||
-                    runtimeStatus !== "ready" ||
-                    (isLiveElectronRuntime && !canControlSelectedProcess)
-                  }
-                  onClick={() => handleProcessAction("start")}
-                />
-                <ShinyButton
-                  label="Stop"
-                  hex={accent.rose}
-                  icon={Square}
-                  disabled={
-                    !selectedProcess ||
-                    isPending ||
-                    runtimeStatus !== "ready" ||
-                    (isLiveElectronRuntime && !canControlSelectedProcess)
-                  }
-                  onClick={() => handleProcessAction("stop")}
-                />
-                <ShinyButton
-                  label="Restart"
-                  hex={accent.purple}
-                  icon={RefreshCw}
-                  disabled={
-                    !selectedProcess ||
-                    isPending ||
-                    runtimeStatus !== "ready" ||
-                    (isLiveElectronRuntime && !canControlSelectedProcess)
-                  }
-                  onClick={() => handleProcessAction("restart")}
-                />
                 <ShinyButton
                   label="Scan"
                   hex={accent.cyan}

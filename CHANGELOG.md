@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 09:21 EDT
+
+- removed the extra warning copy from observed process cards and inspector states so those surfaces stay visually clean
+- added simple `managed` and `observed` ownership tags anywhere process status is shown
+- refreshed the README, overview, and roadmap to document the cleaner process labeling
+- revalidated the app with a successful `npm run build`
+
+## 2026-03-31 09:14 EDT
+
+- removed the confusing shared header start, stop, and restart buttons that could appear disabled when the current selection was not a managed service
+- moved lifecycle actions onto process surfaces so managed services can be controlled directly from their cards and inspector without scrolling back to the top bar
+- refreshed the README, overview, and roadmap to document the process-first interaction model
+- revalidated the app with a successful `npm run build`
+
+## 2026-03-31 09:04 EDT
+
+- fixed managed start, stop, and restart actions by teaching the Electron runtime to reattach matching services that were already running on the host before Mewl connected
+- added process-level lifecycle controls to expanded process cards and the full inspector so service actions no longer depend only on the global top command strip
+- kept observed host processes read-only in the UI, with clearer messaging when a process is not managed through `mewl.services.json`
+- refreshed the README, overview, and roadmap to document the lifecycle-control pass
+- revalidated the app with a successful `npm run build` and a direct Electron runtime action script covering stop, start, and restart
+
 ## 2026-03-31 08:56 EDT
 
 - added GPU telemetry sampling to the Electron runtime, with `nvidia-smi` and DRM sysfs fallbacks plus a clean unavailable state when the host exposes no readable GPU counters

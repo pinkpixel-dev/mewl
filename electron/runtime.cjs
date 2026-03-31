@@ -61,6 +61,7 @@ function getManagedState(serviceId) {
 
   const created = {
     child: null,
+    adoptedPid: null,
     starting: false,
     stopping: false,
     restartCount: 0,
@@ -765,7 +766,20 @@ function attachChildListeners(service, serviceState, child) {
 }
 
 function isServiceRunning(serviceState) {
-  return Boolean(serviceState.child && serviceState.child.exitCode === null);
+  if (serviceState.child && serviceState.child.exitCode === null) {
+    return true;
+  }
+
+  if (Number.isInteger(serviceState.adoptedPid)) {
+    try {
+      process.kill(serviceState.adoptedPid, 0);
+      return true;
+    } catch (_error) {
+      serviceState.adoptedPid = null;
+    }
+  }
+
+  return false;
 }
 
 function buildManagedEnvironment(service) {
@@ -783,15 +797,19 @@ function buildManagedEnvironment(service) {
   };
 }
 
-async function assertReservedPortsAvailable(service) {
+async function assertReservedPortsAvailable(service, ignoredPids = []) {
   if (!service.watchPorts || service.ports.length === 0) {
     return;
   }
 
+  const ignoredPidSet = new Set(ignoredPids.filter((value) => Number.isInteger(value)));
   const bindings = await readPortBindings();
   const occupiedPorts = new Set(
     bindings
-      .filter((binding) => service.ports.includes(binding.port))
+      .filter(
+        (binding) =>
+          service.ports.includes(binding.port) && !ignoredPidSet.has(binding.pid),
+      )
       .map((binding) => binding.port),
   );
 
@@ -810,6 +828,7 @@ async function startManagedService(service) {
 
   serviceState.starting = true;
   serviceState.stopping = false;
+  serviceState.adoptedPid = null;
   appendManagedLogEntry(
     serviceState.logs,
     "stdout",
@@ -819,7 +838,7 @@ async function startManagedService(service) {
   const cwd = resolveServiceCwd(service.cwd);
   const env = buildManagedEnvironment(service);
   const executable = await resolveExecutable(service.command, env.PATH);
-  await assertReservedPortsAvailable(service);
+  await assertReservedPortsAvailable(service, [serviceState.adoptedPid]);
 
   const child = spawn(executable, service.args, {
     cwd,
@@ -843,6 +862,81 @@ function waitForChildExit(child) {
 
     child.once("exit", () => resolve());
   });
+}
+
+async function waitForPidExit(pid, timeoutMs = 4000) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      process.kill(pid, 0);
+      await delay(120);
+    } catch (_error) {
+      return;
+    }
+  }
+}
+
+function findAdoptableProcessForService(service, rawProcesses, portMap) {
+  const expectedCommand = [service.command, ...(service.args ?? [])].join(" ").trim();
+  const expectedCwd = resolveServiceCwd(service.cwd);
+
+  return (
+    rawProcesses.find((processRow) => {
+      const discoveredPorts = (portMap.get(processRow.pid) ?? []).map((binding) => binding.port);
+      const sharesReservedPort =
+        service.ports.length > 0 && discoveredPorts.some((port) => service.ports.includes(port));
+
+      return (
+        processRow.cwd === expectedCwd &&
+        (processRow.args.trim() === expectedCommand || sharesReservedPort)
+      );
+    }) ?? null
+  );
+}
+
+function syncManagedServiceState(service, rawProcesses, portMap) {
+  const serviceState = getManagedState(service.id);
+
+  if (serviceState.child && serviceState.child.exitCode === null) {
+    serviceState.adoptedPid = null;
+    return {
+      serviceState,
+      adoptedProcess: null,
+    };
+  }
+
+  const adoptedProcess = findAdoptableProcessForService(service, rawProcesses, portMap);
+  serviceState.adoptedPid = adoptedProcess?.pid ?? null;
+
+  if (adoptedProcess) {
+    if (
+      typeof serviceState.lastExit === "string" &&
+      serviceState.lastExit.includes("could not start because reserved port")
+    ) {
+      serviceState.lastExit = "Running after host reattachment";
+    }
+
+    const alreadyLoggedReattach = serviceState.logs.stdout.some(
+      (entry) => entry.text === `Mewl reattached ${service.name} from a live host process on pid ${adoptedProcess.pid}.`,
+    );
+
+    if (!alreadyLoggedReattach) {
+      appendManagedLogEntry(
+        serviceState.logs,
+        "stdout",
+        createLogEntry(
+          "info",
+          `Mewl reattached ${service.name} from a live host process on pid ${adoptedProcess.pid}.`,
+        ),
+      );
+    }
+  }
+
+  return {
+    serviceState,
+    adoptedProcess,
+  };
 }
 
 function buildAutomationRules(services, profiles) {
@@ -887,25 +981,47 @@ async function stopManagedService(service) {
   );
 
   const child = serviceState.child;
+  if (child && child.exitCode === null) {
+    if (process.platform === "win32") {
+      child.kill("SIGTERM");
+    } else {
+      process.kill(-child.pid, "SIGTERM");
+    }
 
-  if (process.platform === "win32") {
-    child.kill("SIGTERM");
-  } else {
-    process.kill(-child.pid, "SIGTERM");
-  }
-
-  await Promise.race([
-    waitForChildExit(child),
-    delay(4000).then(() => {
-      if (child.exitCode === null) {
-        if (process.platform === "win32") {
-          child.kill("SIGKILL");
-        } else {
-          process.kill(-child.pid, "SIGKILL");
+    await Promise.race([
+      waitForChildExit(child),
+      delay(4000).then(() => {
+        if (child.exitCode === null) {
+          if (process.platform === "win32") {
+            child.kill("SIGKILL");
+          } else {
+            process.kill(-child.pid, "SIGKILL");
+          }
         }
-      }
-    }),
-  ]);
+      }),
+    ]);
+  } else if (serviceState.adoptedPid) {
+    const adoptedPid = serviceState.adoptedPid;
+    process.kill(adoptedPid, "SIGTERM");
+    await waitForPidExit(adoptedPid);
+
+    try {
+      process.kill(adoptedPid, 0);
+      process.kill(adoptedPid, "SIGKILL");
+      await waitForPidExit(adoptedPid, 1200);
+    } catch (_error) {
+      // The adopted process exited during the graceful drain window.
+    }
+
+    serviceState.adoptedPid = null;
+    serviceState.lastExit = "Stopped from the Electron bridge after host reattachment";
+    markHeartbeat(serviceState, "idle");
+    appendManagedLogEntry(
+      serviceState.logs,
+      "stdout",
+      createLogEntry("info", `Managed host process ${service.name} was terminated after reattachment.`),
+    );
+  }
 
   return `Stopped ${service.name}.`;
 }
@@ -1092,9 +1208,9 @@ async function hydrateRuntimeSnapshot() {
   const managedPids = new Set();
 
   const managedProcesses = services.map((service) => {
-    const serviceState = getManagedState(service.id);
-    const childPid = serviceState.child?.pid ?? null;
-    const liveProcess = childPid ? processByPid.get(childPid) ?? null : null;
+    const { serviceState, adoptedProcess } = syncManagedServiceState(service, rawProcesses, portMap);
+    const childPid = serviceState.child?.pid ?? serviceState.adoptedPid ?? null;
+    const liveProcess = childPid ? processByPid.get(childPid) ?? adoptedProcess ?? null : null;
     const livePorts = childPid ? portMap.get(childPid) ?? [] : [];
     const reservedPorts = Array.from(new Set([...service.ports, ...livePorts.map((item) => item.port)]));
     const runtime = service.runtime || normalizeRuntime(service.command, service.args.join(" "));
@@ -1275,6 +1391,8 @@ async function hydrateRuntimeSnapshot() {
 }
 
 async function performProcessAction(action, processId) {
+  await initializeManagedServices();
+
   if (action === "scan") {
     return {
       snapshot: await hydrateRuntimeSnapshot(),

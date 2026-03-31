@@ -60,6 +60,9 @@
 - [x] Add GPU telemetry to the monitor and sidebar health surfaces with graceful unavailable handling
 - [x] Simplify the Automation page by folding the old state column into lighter inline status panels
 - [x] Make the monitor resource-draw cards expandable so long command text stays out of the default layout
+- [x] Add process-level lifecycle controls and host-reattachment so managed services can be reclaimed and controlled after reconnects
+- [x] Move lifecycle actions off the shared header and onto process surfaces so service controls stay in context
+- [x] Replace observed-process warning copy with simple managed/observed ownership tags
 - [ ] Add alerts center filtering by severity, service, and time window
 - [ ] Surface process crash loops, orphaned ports, and unhealthy resource spikes
 - [ ] Add richer charts for CPU, memory, network, and disk trends

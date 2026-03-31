@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 09:31 EDT
+
+- added a UI-backed `Manage` / `Observe` flow so processes can be promoted into or removed from managed service control without hand-editing JSON
+- moved the live managed-service config to a per-user app-data location, using `~/.config/mewl/mewl.services.json` on Linux and platform-equivalent paths elsewhere
+- reset the repo copy of `mewl.services.json` to an empty baseline so new installs do not start with fake sample services
+- refreshed the README, overview, and roadmap to document the new config location and process-management flow
+- revalidated the app with a successful `npm run build` and a direct runtime script that promoted an observed process to managed and then demoted it back
+
 ## 2026-03-31 09:21 EDT
 
 - removed the extra warning copy from observed process cards and inspector states so those surfaces stay visually clean

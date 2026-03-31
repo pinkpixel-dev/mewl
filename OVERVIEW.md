@@ -32,6 +32,7 @@ The current implementation includes:
 - a dedicated Processes page with expandable cards and a full inspector surface
 - process-level lifecycle controls directly on process cards plus the inspector so service actions stay close to the process being operated
 - explicit `managed` and `observed` ownership tags on process surfaces without extra warning copy cluttering the cards
+- a process-level `Manage` / `Observe` action that edits the saved service config from the UI
 - a collapsed process-card layout that keeps the grid tidy by moving long command text into the expanded panel
 - view-specific pages for port registry, monitor, and automation workflows
 - a cleaner Automation page that surfaces latest activity and runtime source inline instead of keeping a bulky secondary state column
@@ -94,8 +95,10 @@ The current implementation:
 - samples GPU pressure when the host exposes it through `nvidia-smi` or DRM sysfs counters, and falls back to an unavailable state when it does not
 - maps the live host snapshot into the existing renderer-facing `RuntimeSnapshot` shape
 - loads `mewl.services.json` and manages only the services explicitly registered there
+- stores the managed-service config in a per-user app-data location (`~/.config/mewl/mewl.services.json` on Linux) so packaged builds do not depend on the repo checkout
 - starts, stops, and restarts managed services through child-process ownership in the Electron main process
 - reattaches matching managed services that are already running on the host so stop and restart still work after Mewl reconnects
+- can promote observed host processes into managed services and demote managed services back to observed by updating the saved config through the preload bridge
 - persists managed `autoStart` and `watchPorts` changes back into `mewl.services.json` through the preload bridge
 - applies enabled startup profiles on Electron boot and lets the Automation view trigger grouped start/stop presets
 - validates managed commands before spawn by requiring a single executable token, a workspace-safe cwd, an explicit inherited environment, and available reserved ports
@@ -161,6 +164,7 @@ This structure keeps the app close to the original mockup mood while making the 
 ## Current Limitations
 
 - Electron is the required runtime host, and lifecycle plus managed settings currently cover only services and startup profiles registered in `mewl.services.json`
+- config persistence now assumes a per-user desktop install path rather than a repo-local JSON file
 - no auth, multi-user roles, or workspace sync
 - no testing suite yet
 - no packaging for desktop delivery yet

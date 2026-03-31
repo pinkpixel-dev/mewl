@@ -906,6 +906,69 @@ function App() {
     </span>
   );
 
+  const focusProcessFromSnapshot = (snapshot: RuntimeSnapshot, process: ManagedProcess) => {
+    const matchedProcess =
+      snapshot.processes.find(
+        (item) =>
+          item.pid === process.pid &&
+          item.command === process.command &&
+          item.cwd === process.cwd,
+      ) ??
+      snapshot.processes.find(
+        (item) => item.name === process.name && item.command === process.command && item.cwd === process.cwd,
+      ) ??
+      snapshot.processes[0];
+
+    if (matchedProcess) {
+      setSelectedProcessId(matchedProcess.id);
+    }
+  };
+
+  const toggleProcessManagement = (process: ManagedProcess, nextManaged: boolean) => {
+    if (runtimeStatus !== "ready") {
+      return;
+    }
+
+    if (isLiveElectronRuntime) {
+      const setProcessManagement = window.mewlHost?.setProcessManagement;
+
+      if (!setProcessManagement) {
+        setCommandState("The Electron bridge is missing its process-management handler.");
+        return;
+      }
+
+      startActionTransition(async () => {
+        try {
+          const result = await setProcessManagement(process.id, nextManaged);
+          applyRuntimeSnapshot(result.snapshot);
+          setCommandState(result.message);
+          setAlertsOpen(false);
+          focusProcessFromSnapshot(result.snapshot, process);
+        } catch (error) {
+          setCommandState(
+            error instanceof Error
+              ? error.message
+              : "The desktop bridge could not update process management.",
+          );
+        }
+      });
+      return;
+    }
+
+    setCommandState("Process management is only available from the Electron desktop bridge.");
+  };
+
+  const renderProcessManagementButton = (process: ManagedProcess) => (
+    <button
+      type="button"
+      onClick={() => toggleProcessManagement(process, !process.managed)}
+      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/18 px-3 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
+      disabled={isPending || runtimeStatus !== "ready"}
+    >
+      {process.managed ? "Observe" : "Manage"}
+    </button>
+  );
+
   const toggleRule = (ruleId: string, nextValue: boolean) => {
     const rule = automationRules.find((item) => item.id === ruleId);
 
@@ -1052,6 +1115,7 @@ function App() {
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <StatusPill tone={processToneMap[selectedProcess.status]} label={selectedProcess.status} />
           {renderProcessOwnershipTag(selectedProcess)}
+          {renderProcessManagementButton(selectedProcess)}
           <span className="rounded-full border border-white/8 bg-black/18 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/48">
             pid {selectedProcess.pid ?? "none"}
           </span>
@@ -1567,6 +1631,10 @@ function App() {
                 {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </button>
 
+              <div className="mt-4">
+                {renderProcessManagementButton(process)}
+              </div>
+
               {process.managed ? (
                 <div className="mt-4">
                   {renderLifecycleControls(process, true)}
@@ -1824,6 +1892,7 @@ function App() {
                   <div className="flex flex-col items-end gap-2">
                     <StatusPill tone={processToneMap[process.status]} label={process.status} />
                     {renderProcessOwnershipTag(process)}
+                    {renderProcessManagementButton(process)}
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-3 text-sm">

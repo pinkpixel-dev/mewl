@@ -9,11 +9,29 @@ const processLimit = 18;
 const sampleDelayMs = 180;
 const oneMegabyte = 1024 * 1024;
 const managedLogTailLimit = 12;
-const serviceConfigPath = path.join(process.cwd(), "mewl.services.json");
 const repoRoot = process.cwd();
 const managedServiceState = new Map();
 let autoStartInitialized = false;
 const defaultInheritedEnvKeys = ["PATH", "HOME", "LANG", "TERM", "USER", "LOGNAME", "SHELL"];
+const serviceConfigFileName = "mewl.services.json";
+const emptyManagedConfig = {
+  services: [],
+  profiles: [],
+};
+
+function getConfigRootPath() {
+  if (process.platform === "win32") {
+    return process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
+  }
+
+  if (process.platform === "darwin") {
+    return path.join(os.homedir(), "Library", "Application Support");
+  }
+
+  return process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+}
+
+const serviceConfigPath = path.join(getConfigRootPath(), "mewl", serviceConfigFileName);
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -94,16 +112,22 @@ async function pathExists(targetPath) {
   }
 }
 
-async function resolveExecutable(command, envPath) {
+async function ensureManagedConfigFile() {
+  const configDirectory = path.dirname(serviceConfigPath);
+  await fs.mkdir(configDirectory, { recursive: true });
+
+  if (!(await pathExists(serviceConfigPath))) {
+    await fs.writeFile(serviceConfigPath, `${JSON.stringify(emptyManagedConfig, null, 2)}\n`, "utf8");
+  }
+}
+
+async function resolveExecutable(command, envPath, cwd) {
   if (!command || /\s/.test(command.trim())) {
     throw new Error("Managed service commands must be a single executable token with no shell parsing.");
   }
 
   if (command.includes(path.sep)) {
-    const resolvedPath = path.resolve(repoRoot, command);
-    if (!resolvedPath.startsWith(repoRoot)) {
-      throw new Error("Managed service executables must live inside the workspace when using a path.");
-    }
+    const resolvedPath = path.isAbsolute(command) ? command : path.resolve(cwd || process.cwd(), command);
 
     if (!(await pathExists(resolvedPath))) {
       throw new Error(`Managed executable not found: ${resolvedPath}`);
@@ -463,6 +487,15 @@ async function readWorkingDirectory(pid) {
   }
 }
 
+async function readProcessCommandLine(pid) {
+  try {
+    const rawValue = await fs.readFile(`/proc/${pid}/cmdline`, "utf8");
+    return rawValue.split("\0").filter(Boolean);
+  } catch (_error) {
+    return [];
+  }
+}
+
 async function readUserProcesses() {
   const username = os.userInfo().username;
   const output = await runCommand("ps", [
@@ -519,6 +552,31 @@ async function readUserProcesses() {
       cwd: await readWorkingDirectory(processRow.pid),
     })),
   );
+}
+
+function slugifyServiceId(value) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function createManagedServiceId(name, services) {
+  const baseId = slugifyServiceId(name) || "managed-process";
+  let candidate = baseId;
+  let index = 2;
+
+  while (services.some((service) => service.id === candidate)) {
+    candidate = `${baseId}-${index}`;
+    index += 1;
+  }
+
+  return candidate;
+}
+
+function createManagedServiceName(processRow) {
+  const basename = path.basename(processRow.command || "").trim();
+  return basename || processRow.command || `pid-${processRow.pid}`;
 }
 
 function parsePortFromTarget(target) {
@@ -605,6 +663,8 @@ async function readPortBindings() {
 }
 
 async function loadManagedConfig() {
+  await ensureManagedConfigFile();
+
   try {
     const raw = await fs.readFile(serviceConfigPath, "utf8");
     const parsed = JSON.parse(raw);
@@ -666,7 +726,7 @@ async function loadManagedConfig() {
     };
   } catch (error) {
     if (error && typeof error === "object" && error.code === "ENOENT") {
-      return { services: [], profiles: [] };
+      return emptyManagedConfig;
     }
 
     throw error;
@@ -674,6 +734,7 @@ async function loadManagedConfig() {
 }
 
 async function saveManagedConfig(config) {
+  await ensureManagedConfigFile();
   await fs.writeFile(
     serviceConfigPath,
     `${JSON.stringify(config, null, 2)}\n`,
@@ -682,10 +743,9 @@ async function saveManagedConfig(config) {
 }
 
 function resolveServiceCwd(relativeCwd) {
-  const resolvedPath = path.resolve(repoRoot, relativeCwd);
-  if (!resolvedPath.startsWith(repoRoot)) {
-    throw new Error("Managed service working directories must stay inside the workspace root.");
-  }
+  const resolvedPath = path.isAbsolute(relativeCwd)
+    ? relativeCwd
+    : path.resolve(repoRoot, relativeCwd);
   return resolvedPath;
 }
 
@@ -837,7 +897,7 @@ async function startManagedService(service) {
 
   const cwd = resolveServiceCwd(service.cwd);
   const env = buildManagedEnvironment(service);
-  const executable = await resolveExecutable(service.command, env.PATH);
+  const executable = await resolveExecutable(service.command, env.PATH, cwd);
   await assertReservedPortsAvailable(service, [serviceState.adoptedPid]);
 
   const child = spawn(executable, service.args, {
@@ -1453,6 +1513,98 @@ async function updateManagedService(processId, updates) {
   };
 }
 
+async function setProcessManagement(processId, managed) {
+  const config = await loadManagedConfig();
+
+  if (managed) {
+    if (!processId.startsWith("pid-")) {
+      return {
+        snapshot: await hydrateRuntimeSnapshot(),
+        message: "This process is already managed.",
+      };
+    }
+
+    const pid = Number.parseInt(processId.replace("pid-", ""), 10);
+    if (!Number.isInteger(pid)) {
+      throw new Error("The selected process could not be promoted because its pid is invalid.");
+    }
+
+    const [rawProcesses, rawBindings, argv] = await Promise.all([
+      readUserProcesses(),
+      readPortBindings(),
+      readProcessCommandLine(pid),
+    ]);
+    const processRow = rawProcesses.find((item) => item.pid === pid);
+
+    if (!processRow) {
+      throw new Error("The selected observed process is no longer running.");
+    }
+
+    const portMap = new Map();
+    for (const binding of rawBindings) {
+      const list = portMap.get(binding.pid) ?? [];
+      list.push(binding);
+      portMap.set(binding.pid, list);
+    }
+
+    const executable = argv[0] ?? processRow.command;
+    const args = argv.length > 1 ? argv.slice(1) : [];
+    const runtime = normalizeRuntime(processRow.command, processRow.args);
+    const cwd = processRow.cwd || os.homedir();
+    const ports = Array.from(
+      new Set((portMap.get(processRow.pid) ?? []).map((binding) => binding.port)),
+    ).sort((left, right) => left - right);
+    const name = createManagedServiceName(processRow);
+    const nextService = {
+      id: createManagedServiceId(name, config.services),
+      name,
+      description: `Managed from the live host scan by Mewl.`,
+      command: executable,
+      args,
+      cwd,
+      runtime,
+      group: normalizeGroup(runtime, cwd),
+      watchPorts: ports.length > 0,
+      autoStart: false,
+      ports,
+      inheritEnv: [...defaultInheritedEnvKeys],
+      env: {},
+    };
+
+    config.services.push(nextService);
+    await saveManagedConfig(config);
+
+    return {
+      snapshot: await hydrateRuntimeSnapshot(),
+      message: `${nextService.name} is now managed by Mewl.`,
+    };
+  }
+
+  const serviceIndex = config.services.findIndex((service) => service.id === processId);
+  if (serviceIndex === -1) {
+    return {
+      snapshot: await hydrateRuntimeSnapshot(),
+      message: "This process is already observed.",
+    };
+  }
+
+  const removedService = config.services[serviceIndex];
+  config.services.splice(serviceIndex, 1);
+  config.profiles = config.profiles
+    .map((profile) => ({
+      ...profile,
+      serviceIds: profile.serviceIds.filter((serviceId) => serviceId !== processId),
+    }))
+    .filter((profile) => profile.serviceIds.length > 0);
+  await saveManagedConfig(config);
+  managedServiceState.delete(processId);
+
+  return {
+    snapshot: await hydrateRuntimeSnapshot(),
+    message: `${removedService.name} is now observed only.`,
+  };
+}
+
 async function applyAutomationRule(ruleId, enabled) {
   const config = await loadManagedConfig();
 
@@ -1516,6 +1668,7 @@ async function shutdownManagedServices() {
 module.exports = {
   hydrateRuntimeSnapshot,
   performProcessAction,
+  setProcessManagement,
   updateManagedService,
   applyAutomationRule,
   shutdownManagedServices,

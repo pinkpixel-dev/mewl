@@ -7,6 +7,7 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Search a managed local runtime made up of services, workers, tooling, and data processes
 - Scan the live workspace from a compact top command strip
 - Start, stop, and restart managed services directly from process cards and the full inspector where the service context is visible
+- Promote observed processes into managed services and switch managed services back to observed directly from the UI
 - Persist workspace state across refreshes, including the active view, filters, sidebar state, selected process, expanded cards, alerts, and automation toggles
 - Use a cleaner overview dashboard with summary cards plus side-by-side process and port previews
 - Jump from dashboard previews into dedicated Processes and Ports pages with `See all` actions
@@ -42,6 +43,7 @@ This is the first real product pass, not the final native implementation yet.
 - Lifecycle actions, automation toggles, startup profiles, and managed-service logs now round-trip through the live Electron runtime.
 - Electron is the chosen host integration layer for the native bridge because it keeps the renderer, preload contract, and runtime orchestration in the same TypeScript stack.
 - Managed process launching, live port discovery, and host telemetry now run through the Electron preload bridge, with observed host processes remaining read-only unless Mewl explicitly owns them.
+- Managed-service configuration now lives in a per-user app config file instead of the repo, so packaged Electron builds can keep using the same settings location.
 
 ## Run Locally
 
@@ -85,7 +87,14 @@ npm run desktop
 
 `npm run desktop` now rebuilds the Vite renderer before launch, and the production bundle emits relative asset paths so Electron can load `dist/index.html` over `file://` without dropping to a blank window.
 
-Managed desktop services are defined in [`mewl.services.json`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/mewl.services.json). Mewl only performs lifecycle control for services listed there, while other discovered host processes stay read-only.
+Managed desktop services are stored in a per-user config file:
+
+- Linux: `~/.config/mewl/mewl.services.json`
+- macOS: `~/Library/Application Support/mewl/mewl.services.json`
+- Windows: `%APPDATA%\\mewl\\mewl.services.json`
+
+The repository copy at [`mewl.services.json`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/mewl.services.json) is now an empty baseline instead of a seeded fake-service list.
+Mewl only performs lifecycle control for services listed in the per-user config, while other discovered host processes stay observed until you promote them from the UI.
 Those same managed services now drive the inspector toggles and Electron automation rules, so the UI edits the real desktop config instead of local-only state.
 Profiles in that same file can now boot or quiet grouped services through the Automation page, and enabled startup profiles are applied when the Electron runtime hydrates.
 Managed service launches are now intentionally strict: Mewl resolves a single executable token, keeps service working directories inside the repo, inherits only explicitly listed environment variables, and blocks starts when reserved ports are already occupied.
@@ -136,6 +145,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - dedicated Processes page with expandable cards and a full-width inspector
 - process cards now carry their own lifecycle controls instead of depending on distant header buttons
 - process surfaces now label each entry as `managed` or `observed` without extra explanatory filler on observed cards
+- process surfaces now include `Manage` / `Observe` actions so users do not have to hunt down the config file for common cases
 - collapsed process cards now stay compact, with long command and path details moved into the expanded state
 - dedicated Ports and Monitor pages for deeper operational detail
 - GPU telemetry folded into the host monitor and sidebar health card, with graceful fallback when the host bridge cannot read GPU data

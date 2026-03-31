@@ -63,6 +63,7 @@
 - [x] Add process-level lifecycle controls and host-reattachment so managed services can be reclaimed and controlled after reconnects
 - [x] Move lifecycle actions off the shared header and onto process surfaces so service controls stay in context
 - [x] Replace observed-process warning copy with simple managed/observed ownership tags
+- [x] Move managed-service config to a per-user app-data location and add UI actions to promote or demote processes
 - [ ] Add alerts center filtering by severity, service, and time window
 - [ ] Surface process crash loops, orphaned ports, and unhealthy resource spikes
 - [ ] Add richer charts for CPU, memory, network, and disk trends

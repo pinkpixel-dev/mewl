@@ -1,0 +1,23 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## 2026-03-31 04:50 EDT
+
+- tightened the main dashboard spacing so the workspace controls sit directly under `Active Workspace`
+- moved the action buttons to the left of the search field for a cleaner desktop command strip
+- rebalanced the top summary grid and lower workspace columns to keep cards aligned with less dead space
+- fixed the sidebar Flow Health card by making its signal bars scale to the available rail width
+- extended the shared `ShinyButton` and `SignalBars` components to support more flexible layout composition
+- revalidated the UI with a successful production build and a headless browser screenshot pass
+
+## 2026-03-31 04:20 EDT
+
+- scaffolded Mewl as a React + TypeScript + Vite application
+- added Tailwind CSS 4 through the official Vite plugin
+- created a server manager dashboard layout inspired by `mockup.png`
+- integrated the provided icon asset into the app shell and favicon
+- implemented frosted glass surfaces, dotted texture, ambient glows, and Pink Pixel color direction
+- added Sparklebots-inspired reusable UI components for buttons, cards, toggles, progress bars, status pills, and signal bars
+- verified the UI with a successful production build and desktop/mobile browser smoke checks
+- created baseline project documentation and an Apache 2.0 license

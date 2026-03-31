@@ -1,0 +1,36 @@
+{
+  "name": "mewl",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Mewl server manager scaffold with a frosted-glass dashboard and Pink Pixel styling.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "mewl",
+    "server-manager",
+    "vite",
+    "react",
+    "tailwindcss",
+    "pink-pixel"
+  ],
+  "author": "Pink Pixel <admin@pinkpixel.dev>",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "lucide-react": "^1.7.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.3"
+  }
+}

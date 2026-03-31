@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Mewl is a server manager interface scaffold designed for Pink Pixel. The goal of this first pass is to establish a strong visual and architectural base that matches the provided mockup mood while keeping the implementation lightweight and easy to extend.
+Mewl is a local process and port management app for Pink Pixel. This pass moves the project from a visual scaffold into a front-end product shell for controlling services, reviewing port bindings, and monitoring machine pressure from a single workspace.
 
 ## Technical Summary
 
@@ -12,12 +12,22 @@ Mewl is a server manager interface scaffold designed for Pink Pixel. The goal of
 - Styling: Tailwind CSS 4 plus custom CSS tokens and effects
 - Icons: lucide-react
 - Asset strategy: static assets served from `public/`
+- Dev server port: `29463`
 
 ## Application Structure
 
 ### `src/App.tsx`
 
-Defines the dashboard layout, page sections, sample server data, notification tray, and interactive state. The current composition keeps the command strip directly under the workspace label, places alerts behind a top-right bell trigger, and removes longer scaffold copy from the main surfaces.
+Defines the main product shell, workspace views, action handlers, search/filter state, alerts tray, and process-selection workflow.
+
+The current implementation includes:
+
+- a collapsible left navigation rail for overview, processes, ports, monitor, and automation
+- a compact action/search header with no large banner copy
+- a clean dashboard made of summary cards plus short process and port preview lists
+- a dedicated Processes page with expandable cards and a full inspector surface
+- view-specific pages for port registry, monitor, and automation workflows
+- local state transitions that simulate lifecycle actions before a real runtime bridge exists
 
 ### `src/components/ui.tsx`
 
@@ -31,7 +41,23 @@ Contains reusable presentation components used throughout the app:
 - `HologramProgress`
 - `SignalBars`
 
-The shared UI layer now also supports width-aware button and signal-bar composition, neutral slate surfaces, and optional minimal card copy so tighter regions such as the sidebar can reuse the same components without overflow or filler text.
+The shared UI layer also now supports:
+
+- a `starting` status tone for booting services
+- interactive action buttons with `onClick` and disabled states
+- neutral glass surfaces, accent glows, and compact operational density
+
+### `src/data/runtime.ts`
+
+Holds the mock runtime model that currently powers the interface:
+
+- managed processes with command, cwd, PID, ports, and resource usage
+- port registry bindings with exposure and conflict state
+- alerts and incident feed entries
+- monitor metrics
+- automation rules
+
+This file is the current contract surface for the future backend/native adapter.
 
 ### `src/styles.css`
 
@@ -47,44 +73,42 @@ Holds the visual system outside component logic:
 
 ## Layout Model
 
-The current scaffold is organized into five major workspace zones:
+The current app is organized into six major workspace zones:
 
 1. Left navigation rail
-2. Active workspace header with alert trigger
-3. Command strip and search row
-4. Metrics overview row
-5. Fleet management plus automation controls
-6. Inline notification tray anchored to the top-right bell
+2. Sidebar host health plus compact machine snapshot
+3. Workspace header with alert tray and lifecycle actions
+4. Overview summary cards
+5. Dashboard preview panels for processes and port bindings
+6. Dedicated full pages for processes, ports, monitoring, and automation
 
-This structure was chosen to stay close to the composition of `mockup.png`, which reads more like an operational control surface than a marketing page.
-
-The latest layout pass focused on three things:
-
-- replacing the colorful page backdrop with a near-black slate canvas and dotted texture
-- keeping cards gray while moving color into glows, icons, charts, toggles, and progress
-- removing descriptive scaffold copy so the interface reads as labels, values, and actions
+This structure keeps the app close to the original mockup mood while making the main surface useful for real local-ops workflows.
 
 ## Interaction Model
 
 - search input uses `useDeferredValue` to keep filtering responsive
-- toggles allow the scaffold to demonstrate state changes without backend wiring
+- workspace changes use `startTransition` to keep view switching lightweight
+- lifecycle actions use `useTransition` to simulate non-blocking start, stop, restart, and scan operations
+- the sidebar can collapse to icon-only navigation for a roomier workspace
+- process cards can expand in place for more detail before the full inspector is needed
+- toggles mutate selected-service and automation state locally until a backend exists
 - button glow behavior follows Sparklebots interaction patterns
 - progress indicators and animated signal bars add motion without crowding the layout
-- the signal bar helper can now expand to fill its container instead of depending on fixed bar widths
 - alert visibility uses local `useState` and conditional rendering for the top-right tray
 
 ## Current Limitations
 
-- no backend or live server management API
-- no persistence for settings or filters
-- no auth, routing, or role management
+- no native process bridge yet, so OS process control is not live
+- no real port inspection or system telemetry ingestion
+- no persistence for settings, filters, or automation rules
+- no auth, multi-user roles, or workspace sync
 - no testing suite yet
-- no data visualization beyond lightweight decorative indicators
+- no packaging for desktop delivery yet
 
 ## Extension Points
 
-- replace in-file mock data with an API client layer
-- add React Router for multi-screen management
-- introduce authenticated workspaces and environment switching
-- connect deployment activity to real logs and job states
-- add charts, filters, and server detail drawers
+- replace the mock runtime file with a real adapter backed by Electron, Tauri, or a local daemon
+- wire lifecycle actions to spawn, kill, restart, and inspect real processes
+- add live port discovery and collision detection from the host machine
+- persist workspace profiles, startup groups, and automation presets
+- add charts, logs, tails, and richer process detail panes

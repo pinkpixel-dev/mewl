@@ -1,18 +1,18 @@
 # Mewl
 
-Mewl is a server manager app scaffold for Pink Pixel. It pairs a dark textured backdrop with frosted glass surfaces, Sparklebots-inspired controls, and a layout direction based on `mockup.png`.
+Mewl is a local operations cockpit for Pink Pixel. The current app turns the original dashboard scaffold into a process-oriented control surface for managing running services, watched ports, quick lifecycle actions, and host pressure from one workspace.
 
-## Highlights
+## What It Does Today
 
-- React + TypeScript + Vite app scaffold
-- Tailwind CSS 4 wired through the Vite plugin
-- Pink Pixel branding with the provided `icon.png` used for app identity and favicon
-- Dark slate background with dotted texture and restrained neutral lighting
-- Gray glass panels with accent glows instead of colored card fills
-- Sparklebots-style buttons, stat cards, toggles, progress bars, and alerts tray using five accent colors
-- Top-right notification bell replaces the old bottom activity panel
-- Copy-light dashboard surfaces built from labels, values, icons, and controls
-- Responsive desktop and mobile layout validation
+- Search a managed local runtime made up of services, workers, tooling, and data processes
+- Start, stop, restart, and scan the selected service from a compact top command strip
+- Use a cleaner overview dashboard with summary cards plus side-by-side process and port previews
+- Jump from dashboard previews into dedicated Processes and Ports pages with `See all` actions
+- Browse the Processes page as expandable three-column cards with the full inspector shown below
+- Review a port registry with exposure, conflict, and watched-binding states
+- Track host CPU, memory, disk, and network pressure from the sidebar and monitor view
+- Collapse the sidebar when you want more room for the main workspace
+- Use a dedicated Vite dev port at `29463` instead of the default `5173`
 
 ## Stack
 
@@ -22,11 +22,25 @@ Mewl is a server manager app scaffold for Pink Pixel. It pairs a dark textured b
 - Tailwind CSS 4
 - lucide-react
 
+## Current Reality
+
+This is the first real product pass, not the final native implementation yet.
+
+- The UI is interactive and stateful, but process control is still powered by a mock front-end runtime model in [`src/data/runtime.ts`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/src/data/runtime.ts).
+- Real OS process launching, killing, port discovery, and machine telemetry will require a local bridge layer such as Electron, Tauri, or a small local daemon/API.
+- The app is already structured around that future workflow, so the next step is wiring the current actions to a real runtime adapter.
+
 ## Run Locally
 
 ```bash
 npm install
 npm run dev
+```
+
+The dev server now runs on:
+
+```text
+http://127.0.0.1:29463
 ```
 
 Build for production:
@@ -51,6 +65,8 @@ npm run preview
 |-- src/
 |   |-- components/
 |   |   `-- ui.tsx
+|   |-- data/
+|   |   `-- runtime.ts
 |   |-- App.tsx
 |   |-- main.tsx
 |   |-- styles.css
@@ -68,14 +84,14 @@ npm run preview
 
 ## Design Direction
 
-The current scaffold is intentionally product-like rather than starter-like:
+The current product direction is intentionally utility-first rather than dashboard wallpaper:
 
-- left navigation rail with icon-led brand treatment
-- compact operational header with actions, search, and a top-right alerts trigger
-- compact metric cards with neutral fills and accent edge glow
-- server table and automation controls as primary workspace surfaces
-- evenly spaced workspace grids that keep major cards aligned without wasted vertical gaps
-- dark dotted texture to echo the mockup instead of a flat black background
+- collapsible left navigation rail for overview, processes, ports, monitor, and automation
+- compact operational header with lifecycle actions, search, and alert tray instead of hero copy
+- clean overview dashboard with summary cards and short preview lists instead of oversized explainer surfaces
+- dedicated Processes page with expandable cards and a full-width inspector
+- dedicated Ports and Monitor pages for deeper operational detail
+- Pink Pixel branding applied without turning the app into a generic purple SaaS grid
 
 ## Brand
 
@@ -90,4 +106,4 @@ The current scaffold is intentionally product-like rather than starter-like:
 
 - `mockup.png` remains the visual reference image in the repository.
 - `public/icon.png` is used by the app shell and browser tab.
-- The current scaffold is a polished UI foundation with stripped-down copy and does not yet include real server APIs or authentication.
+- The current implementation is a polished local-ops foundation with mock runtime data and no native system bridge yet.

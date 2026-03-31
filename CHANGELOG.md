@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 05:58 EDT
+
+- removed the large dashboard banner copy and extra sidebar subtitle to keep the shell cleaner and more utility-focused
+- replaced the overview workspace cards with a tighter three-card summary row plus matching side-by-side process and port preview panels
+- moved the full inspector off the dashboard and onto the Processes page
+- rebuilt the Processes page around expandable three-column service cards with the inspector shown below the grid
+- added a collapsible sidebar and moved the host snapshot into the rail below host health
+- kept the Ports and Monitor views as dedicated pages while leaving only the basics on the overview dashboard
+
+## 2026-03-31 05:31 EDT
+
+- turned the original server-themed scaffold into a local process-management workspace for services, ports, automation, and host monitoring
+- added a real front-end runtime model in `src/data/runtime.ts` to drive processes, port bindings, alerts, monitor metrics, and automation rules
+- replaced the placeholder fleet table and cards with a searchable managed-runtime table, selected-service inspector, port registry, and monitor-focused secondary views
+- wired interactive quick actions for start, stop, restart, and port scanning using React deferred and transition-friendly state patterns
+- extended the shared UI primitives to support button click handlers, disabled states, and a dedicated `starting` status tone
+- moved the Vite dev and preview server to a fixed dedicated port at `29463`
+- refreshed the project documentation and roadmap around the real app goal: local process orchestration with a future native runtime bridge
+
 ## 2026-03-31 05:02 EDT
 
 - replaced the pink-purple page backdrop with a dark slate background, dotted texture, and neutral glass surfaces

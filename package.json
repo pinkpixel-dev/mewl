@@ -2,7 +2,7 @@
   "name": "mewl",
   "private": true,
   "version": "0.1.0",
-  "description": "Mewl server manager scaffold with a frosted-glass dashboard and Pink Pixel styling.",
+  "description": "Mewl local process manager for running services, ports, and system monitoring with Pink Pixel styling.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,9 @@
   },
   "keywords": [
     "mewl",
-    "server-manager",
+    "process-manager",
+    "port-manager",
+    "system-monitoring",
     "vite",
     "react",
     "tailwindcss",

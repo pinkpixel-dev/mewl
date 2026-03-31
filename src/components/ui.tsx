@@ -4,12 +4,13 @@ import { Search } from "lucide-react";
 
 type LucideIcon = ComponentType<LucideProps>;
 
-type StatusTone = "online" | "warning" | "offline";
+type StatusTone = "online" | "warning" | "offline" | "starting";
 
 const toneMap: Record<StatusTone, { label: string; hex: string }> = {
   online: { label: "Online", hex: "#74f7b0" },
   warning: { label: "Warning", hex: "#fbbf24" },
   offline: { label: "Offline", hex: "#fb7185" },
+  starting: { label: "Starting", hex: "#22d3ee" },
 };
 
 export function StatusPill({
@@ -51,16 +52,24 @@ export function ShinyButton({
   icon: Icon,
   subtle = false,
   className = "",
+  disabled = false,
+  onClick,
 }: {
   label: string;
   hex: string;
   icon?: LucideIcon;
   subtle?: boolean;
   className?: string;
+  disabled?: boolean;
+  onClick?: () => void;
 }) {
   const ref = useRef<HTMLButtonElement | null>(null);
 
   const updateGlow = (event: PointerEvent<HTMLButtonElement>) => {
+    if (disabled) {
+      return;
+    }
+
     const element = ref.current;
     if (!element) {
       return;
@@ -76,8 +85,13 @@ export function ShinyButton({
   return (
     <button
       ref={ref}
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
       onPointerMove={updateGlow}
-      className={`group relative overflow-hidden rounded-[22px] border px-4 py-3 text-left transition duration-300 hover:-translate-y-0.5 ${
+      className={`group relative overflow-hidden rounded-[22px] border px-4 py-3 text-left transition duration-300 ${
+        disabled ? "cursor-not-allowed opacity-55" : "hover:-translate-y-0.5"
+      } ${
         subtle
           ? "border-white/10 bg-[#0e1218]/92"
           : "border-white/12 bg-[#11161d]/94"
@@ -85,8 +99,8 @@ export function ShinyButton({
       style={
         {
           boxShadow: subtle
-            ? `0 18px 50px -36px ${hex}88`
-            : `0 22px 70px -34px ${hex}92`,
+            ? `0 18px 50px -36px ${disabled ? `${hex}30` : `${hex}88`}`
+            : `0 22px 70px -34px ${disabled ? `${hex}30` : `${hex}92`}`,
         } satisfies CSSProperties
       }
     >

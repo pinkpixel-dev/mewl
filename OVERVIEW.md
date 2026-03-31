@@ -4,7 +4,7 @@
 
 Mewl is a local process and port management app for Pink Pixel. This pass pushes the project from a visual scaffold into a more functional product shell by restoring workspace state, surfacing structured process logs, and handling runtime loading and failure states more deliberately.
 
-The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam so the renderer no longer depends directly on the mock boot helpers, and adds a first live host snapshot path through Electron preload IPC.
+The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam so the renderer no longer depends directly on the mock boot helpers, adds a live host snapshot path through Electron preload IPC, and wires real lifecycle control for Mewl-owned services.
 
 ## Technical Summary
 
@@ -86,7 +86,9 @@ The current implementation:
 - scans bound TCP and UDP ports with `lsof`, with `ss` as a host-command fallback
 - samples CPU, memory, disk, and network pressure from the local machine
 - maps the live host snapshot into the existing renderer-facing `RuntimeSnapshot` shape
-- avoids fake lifecycle behavior in Electron mode by leaving start, stop, and restart disabled until managed execution is wired
+- loads `mewl.services.json` and manages only the services explicitly registered there
+- starts, stops, and restarts managed services through child-process ownership in the Electron main process
+- keeps discovered host processes read-only so Mewl does not send lifecycle signals to processes it does not own
 
 ### `src/styles.css`
 
@@ -131,7 +133,7 @@ This structure keeps the app close to the original mockup mood while making the 
 ## Current Limitations
 
 - no native process bridge yet, so OS process control is not live
-- Electron is chosen as the host layer, but managed lifecycle control still needs to be implemented on top of the live bridge
+- Electron is chosen as the host layer, but lifecycle control currently only covers services registered in `mewl.services.json`
 - no auth, multi-user roles, or workspace sync
 - no testing suite yet
 - no packaging for desktop delivery yet
@@ -141,7 +143,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - replace the browser fallback path with the real Electron-backed adapter exposed through the runtime provider
 - replace the remaining temporary browser mock fallback once the desktop bridge owns the full product path
 - implement the Electron preload and main-process bridge behind the runtime provider
-- wire lifecycle actions to spawn, kill, restart, and inspect real processes
+- expand lifecycle control beyond the starter managed-service config and add richer service definitions, environment handling, and exit diagnostics
 - add live port discovery and collision detection from the host machine
 - persist workspace profiles, startup groups, and automation presets beyond the single local session model
 - add richer charts, searchable logs, streaming tails, and deeper process detail panes

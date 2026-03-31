@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 07:32 EDT
+
+- added config-driven managed services in `mewl.services.json` so Electron lifecycle actions only target processes Mewl explicitly owns
+- extended `electron/runtime.cjs` to start, stop, and restart managed services while continuing to scan the live host for discovered processes, ports, and metrics
+- wired the preload and renderer bridge so desktop lifecycle buttons now execute real managed actions instead of staying disabled
+- stopped restoring persisted runtime process data over the live Electron snapshot so the desktop shell shows current host state first
+- marked discovered host processes as observed and left them read-only, including disabling unwired inspector toggles in Electron mode
+- verified the managed-service loop by starting, scanning, and stopping `workspace-sandbox`, and revalidated the web build with `npm run build`
+
 ## 2026-03-31 07:21 EDT
 
 - added an Electron desktop shell with `electron/main.cjs` and `electron/preload.cjs`

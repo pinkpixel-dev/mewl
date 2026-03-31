@@ -27,6 +27,15 @@ export type RuntimeSourceDescriptor = {
 export type MewlHostBridge = {
   hydrateRuntimeSnapshot: () => Promise<RuntimeSnapshot>;
   createDefaultRuntimeSnapshot?: () => Promise<RuntimeSnapshot>;
+  performProcessAction?: (
+    action: "start" | "stop" | "restart" | "scan",
+    processId: string,
+  ) => Promise<RuntimeActionResult>;
+};
+
+export type RuntimeActionResult = {
+  snapshot: RuntimeSnapshot;
+  message: string;
 };
 
 export const chosenHostLayer = {

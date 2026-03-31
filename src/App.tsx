@@ -57,6 +57,7 @@ import {
   createDefaultRuntimeSnapshot,
   getRuntimeSourceDescriptor,
   hydrateRuntimeSnapshot,
+  type RuntimeActionResult,
 } from "./runtime";
 
 type StatusFilter = "all" | "active" | "watching" | "issues";
@@ -277,15 +278,21 @@ function App() {
         const persistedAlerts = persisted?.runtime.alerts;
         const persistedAutomationRules = persisted?.runtime.automationRules;
         const hydratedProcesses =
-          persistedProcesses && persistedProcesses.length > 0
+          !isLiveElectronRuntime && persistedProcesses && persistedProcesses.length > 0
             ? persistedProcesses
             : snapshot.processes;
         const hydratedPorts =
-          persistedPorts && persistedPorts.length > 0 ? persistedPorts : snapshot.ports;
+          !isLiveElectronRuntime && persistedPorts && persistedPorts.length > 0
+            ? persistedPorts
+            : snapshot.ports;
         const hydratedAlerts =
-          persistedAlerts && persistedAlerts.length > 0 ? persistedAlerts : snapshot.alerts;
+          !isLiveElectronRuntime && persistedAlerts && persistedAlerts.length > 0
+            ? persistedAlerts
+            : snapshot.alerts;
         const hydratedAutomationRules =
-          persistedAutomationRules && persistedAutomationRules.length > 0
+          !isLiveElectronRuntime &&
+          persistedAutomationRules &&
+          persistedAutomationRules.length > 0
             ? persistedAutomationRules
             : snapshot.automationRules;
         const fallbackSelectedProcessId =
@@ -343,10 +350,10 @@ function App() {
         expandedProcessIds,
       },
       runtime: {
-        processes,
-        ports,
-        alerts,
-        automationRules,
+        processes: isLiveElectronRuntime ? [] : processes,
+        ports: isLiveElectronRuntime ? [] : ports,
+        alerts: isLiveElectronRuntime ? [] : alerts,
+        automationRules: isLiveElectronRuntime ? [] : automationRules,
         commandState,
       },
     });
@@ -420,6 +427,8 @@ function App() {
     filteredProcesses[0] ??
     processes[0] ??
     null;
+  const canControlSelectedProcess =
+    runtimeStatus === "ready" && Boolean(selectedProcess) && Boolean(selectedProcess?.managed);
 
   const selectedPorts = selectedProcess
     ? ports.filter((port) => port.serviceId === selectedProcess.id)
@@ -560,16 +569,44 @@ function App() {
     }
 
     if (isLiveElectronRuntime) {
-      if (action === "scan") {
-        setCommandState("Refreshing live host services, bindings, and telemetry from Electron.");
+      const hostAction = window.mewlHost?.performProcessAction;
 
-        startActionTransition(async () => {
-          const snapshot = await hydrateRuntimeSnapshot();
-          applyRuntimeSnapshot(snapshot);
-          setCommandState("Live host scan completed.");
-          setAlertsOpen(false);
-        });
+      if (!hostAction) {
+        setCommandState("The Electron bridge is missing its lifecycle action handler.");
+        return;
       }
+
+      if (action !== "scan" && !selectedProcess?.managed) {
+        setCommandState(
+          "Only services registered in mewl.services.json can be started, stopped, or restarted.",
+        );
+        return;
+      }
+
+      setCommandState(
+        action === "scan"
+          ? "Refreshing live host services, bindings, and telemetry from Electron."
+          : `${
+              action === "start"
+                ? "Starting"
+                : action === "stop"
+                  ? "Stopping"
+                  : "Restarting"
+            } ${selectedProcess?.name ?? "service"} from the Electron bridge.`,
+      );
+
+      startActionTransition(async () => {
+        try {
+          const result: RuntimeActionResult = await hostAction(action, selectedProcess?.id ?? "");
+          applyRuntimeSnapshot(result.snapshot);
+          setCommandState(result.message);
+          setAlertsOpen(false);
+        } catch (error) {
+          setCommandState(
+            error instanceof Error ? error.message : "The Electron bridge could not complete that action.",
+          );
+        }
+      });
 
       return;
     }
@@ -935,6 +972,9 @@ function App() {
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <StatusPill tone={processToneMap[selectedProcess.status]} label={selectedProcess.status} />
           <span className="rounded-full border border-white/8 bg-black/18 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/48">
+            {selectedProcess.managed ? "managed" : "observed"}
+          </span>
+          <span className="rounded-full border border-white/8 bg-black/18 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/48">
             pid {selectedProcess.pid ?? "none"}
           </span>
         </div>
@@ -1003,6 +1043,7 @@ function App() {
               );
             }}
             hex={accent.rose}
+            disabled={isLiveElectronRuntime}
           />
           <SweetToggle
             label="Watch ports"
@@ -1023,6 +1064,7 @@ function App() {
               );
             }}
             hex={accent.purple}
+            disabled={isLiveElectronRuntime}
           />
         </div>
 
@@ -1716,8 +1758,9 @@ function App() {
               Lifecycle wiring
             </p>
             <p className="mt-2 text-sm text-white/54">
-              Live host scanning is active through Electron. Start, stop, and restart will be
-              enabled once managed command execution is wired to the desktop bridge.
+              Live host scanning is active through Electron. Start, stop, and restart now work for
+              services registered in `mewl.services.json`, while discovered host processes remain
+              read-only.
             </p>
           </div>
         ) : null}
@@ -1945,7 +1988,7 @@ function App() {
                     !selectedProcess ||
                     isPending ||
                     runtimeStatus !== "ready" ||
-                    isLiveElectronRuntime
+                    (isLiveElectronRuntime && !canControlSelectedProcess)
                   }
                   onClick={() => handleProcessAction("start")}
                 />
@@ -1957,7 +2000,7 @@ function App() {
                     !selectedProcess ||
                     isPending ||
                     runtimeStatus !== "ready" ||
-                    isLiveElectronRuntime
+                    (isLiveElectronRuntime && !canControlSelectedProcess)
                   }
                   onClick={() => handleProcessAction("stop")}
                 />
@@ -1969,7 +2012,7 @@ function App() {
                     !selectedProcess ||
                     isPending ||
                     runtimeStatus !== "ready" ||
-                    isLiveElectronRuntime
+                    (isLiveElectronRuntime && !canControlSelectedProcess)
                   }
                   onClick={() => handleProcessAction("restart")}
                 />

@@ -12,6 +12,7 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Browse the Processes page as expandable three-column cards with the full inspector shown below
 - Inspect per-process stdout and stderr tails from the mock runtime contract
 - Load live processes, listening ports, and host telemetry through an Electron preload bridge when running in the desktop shell
+- Start, stop, and restart Mewl-owned services through a config-driven Electron lifecycle bridge
 - Review a port registry with exposure, conflict, and watched-binding states
 - Track host CPU, memory, disk, and network pressure from the sidebar and monitor view
 - Recover gracefully with loading, empty, and error states while the workspace runtime hydrates
@@ -68,6 +69,8 @@ Run the Electron desktop shell against the live host bridge:
 npm run dev:desktop
 ```
 
+Managed desktop services are defined in [`mewl.services.json`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/mewl.services.json). Mewl only performs lifecycle control for services listed there, while other discovered host processes stay read-only.
+
 ## Project Structure
 
 ```text
@@ -91,6 +94,7 @@ npm run dev:desktop
 |   |-- main.cjs
 |   |-- preload.cjs
 |   `-- runtime.cjs
+|-- mewl.services.json
 |-- CHANGELOG.md
 |-- LICENSE
 |-- OVERVIEW.md
@@ -114,6 +118,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - structured process logs and session memory so the shell feels more like a real local cockpit
 - a runtime source abstraction that keeps the mock snapshot and a future Electron bridge behind the same UI-facing contract
 - a live Electron host bridge that can scan the current user session for processes, ports, and machine pressure
+- config-driven managed services so desktop lifecycle actions only touch processes Mewl explicitly owns
 - Pink Pixel branding applied without turning the app into a generic purple SaaS grid
 
 ## Brand
@@ -132,5 +137,6 @@ The current product direction is intentionally utility-first rather than dashboa
 - The current implementation is a polished local-ops foundation with mock runtime data, persisted workspace state, and no native system bridge yet.
 - Electron is now the documented native-host target, but the repo still ships as a web build until the preload and main-process bridge lands.
 - The desktop shell now has a first live Electron bridge for runtime hydration, but lifecycle control is still being wired one step at a time.
+- The desktop shell can now control services registered in `mewl.services.json`; arbitrary discovered host processes are intentionally read-only.
 - The remaining browser-side mock path is temporary; the long-term goal is a fully live desktop runtime with no mock fallback.
 - The notifications tray is layered above the dashboard surfaces so alerts stay readable when opened from the top command bar.

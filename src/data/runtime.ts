@@ -40,6 +40,7 @@ export type ManagedProcess = {
   lastHeartbeat: string;
   autoStart: boolean;
   watchPorts: boolean;
+  managed: boolean;
   logs: ProcessLogs;
 };
 
@@ -113,6 +114,7 @@ export const initialProcesses: ManagedProcess[] = [
     lastHeartbeat: "8s ago",
     autoStart: true,
     watchPorts: true,
+    managed: true,
     logs: {
       stdout: stdout(
         {
@@ -157,6 +159,7 @@ export const initialProcesses: ManagedProcess[] = [
     lastHeartbeat: "14s ago",
     autoStart: true,
     watchPorts: true,
+    managed: true,
     logs: {
       stdout: stdout(
         {
@@ -214,6 +217,7 @@ export const initialProcesses: ManagedProcess[] = [
     lastHeartbeat: "5s ago",
     autoStart: true,
     watchPorts: false,
+    managed: true,
     logs: {
       stdout: stdout(
         {
@@ -252,6 +256,7 @@ export const initialProcesses: ManagedProcess[] = [
     lastHeartbeat: "11s ago",
     autoStart: true,
     watchPorts: true,
+    managed: true,
     logs: {
       stdout: stdout(
         {
@@ -290,6 +295,7 @@ export const initialProcesses: ManagedProcess[] = [
     lastHeartbeat: "idle",
     autoStart: false,
     watchPorts: true,
+    managed: true,
     logs: {
       stdout: stdout(
         {
@@ -322,6 +328,7 @@ export const initialProcesses: ManagedProcess[] = [
     lastHeartbeat: "booting",
     autoStart: false,
     watchPorts: false,
+    managed: true,
     logs: {
       stdout: stdout(
         {

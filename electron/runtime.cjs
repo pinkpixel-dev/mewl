@@ -1,13 +1,16 @@
 const os = require("node:os");
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const { execFile } = require("node:child_process");
+const { execFile, spawn } = require("node:child_process");
 const { promisify } = require("node:util");
 
 const execFileAsync = promisify(execFile);
 const processLimit = 18;
 const sampleDelayMs = 180;
 const oneMegabyte = 1024 * 1024;
+const managedLogTailLimit = 12;
+const serviceConfigPath = path.join(process.cwd(), "mewl.services.json");
+const managedServiceState = new Map();
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -33,6 +36,37 @@ function createLogEntry(level, text) {
     level,
     text,
   };
+}
+
+function trimLogEntries(entries) {
+  return entries.slice(-managedLogTailLimit);
+}
+
+function appendManagedLogEntry(logs, stream, entry) {
+  logs[stream] = trimLogEntries([...logs[stream], entry]);
+}
+
+function getManagedState(serviceId) {
+  const existing = managedServiceState.get(serviceId);
+  if (existing) {
+    return existing;
+  }
+
+  const created = {
+    child: null,
+    starting: false,
+    stopping: false,
+    restartCount: 0,
+    startedAt: null,
+    lastExit: "No recent exit",
+    lastHeartbeat: "idle",
+    logs: {
+      stdout: [],
+      stderr: [],
+    },
+  };
+  managedServiceState.set(serviceId, created);
+  return created;
 }
 
 async function runCommand(command, args) {
@@ -196,6 +230,27 @@ function formatElapsed(raw) {
   }
 
   return raw;
+}
+
+function formatManagedElapsed(startedAt) {
+  if (!startedAt) {
+    return "stopped";
+  }
+
+  const seconds = Math.max(1, Math.floor((Date.now() - startedAt) / 1000));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+
+  if (minutes > 0) {
+    return `${minutes}m ${remainingSeconds}s`;
+  }
+
+  return `${remainingSeconds}s`;
 }
 
 function inferExposure(target) {
@@ -367,11 +422,217 @@ async function readPortBindings() {
     .filter(Boolean);
 }
 
-function buildAlerts(processes, ports, metrics) {
+async function loadServiceDefinitions() {
+  try {
+    const raw = await fs.readFile(serviceConfigPath, "utf8");
+    const parsed = JSON.parse(raw);
+    const services = Array.isArray(parsed.services) ? parsed.services : [];
+
+    return services
+      .filter((service) => typeof service.id === "string" && typeof service.command === "string")
+      .map((service) => ({
+        id: service.id,
+        name: typeof service.name === "string" ? service.name : service.id,
+        description:
+          typeof service.description === "string"
+            ? service.description
+            : "Managed command registered for the Mewl desktop bridge.",
+        command: service.command,
+        args: Array.isArray(service.args)
+          ? service.args.filter((value) => typeof value === "string")
+          : [],
+        cwd: typeof service.cwd === "string" ? service.cwd : ".",
+        runtime: typeof service.runtime === "string" ? service.runtime : "",
+        group: typeof service.group === "string" ? service.group : "managed",
+        watchPorts: service.watchPorts !== false,
+        autoStart: service.autoStart === true,
+        ports: Array.isArray(service.ports)
+          ? service.ports.filter((value) => Number.isInteger(value))
+          : [],
+        env:
+          service.env && typeof service.env === "object" && !Array.isArray(service.env)
+            ? Object.fromEntries(
+                Object.entries(service.env).filter(([, value]) => typeof value === "string"),
+              )
+            : {},
+      }));
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "ENOENT") {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+function resolveServiceCwd(relativeCwd) {
+  return path.resolve(process.cwd(), relativeCwd);
+}
+
+function markHeartbeat(serviceState, label) {
+  serviceState.lastHeartbeat = label;
+}
+
+function attachChildListeners(service, serviceState, child) {
+  child.stdout?.on("data", (chunk) => {
+    appendManagedLogEntry(
+      serviceState.logs,
+      "stdout",
+      createLogEntry("info", String(chunk).trim() || "stdout updated"),
+    );
+    markHeartbeat(serviceState, "live");
+  });
+
+  child.stderr?.on("data", (chunk) => {
+    appendManagedLogEntry(
+      serviceState.logs,
+      "stderr",
+      createLogEntry("warning", String(chunk).trim() || "stderr updated"),
+    );
+    markHeartbeat(serviceState, "live");
+  });
+
+  child.on("spawn", () => {
+    serviceState.starting = false;
+    serviceState.stopping = false;
+    serviceState.startedAt = Date.now();
+    serviceState.lastExit = "No recent exit";
+    markHeartbeat(serviceState, "just now");
+    appendManagedLogEntry(
+      serviceState.logs,
+      "stdout",
+      createLogEntry(
+        "info",
+        `Managed service ${service.name} started with pid ${child.pid}.`,
+      ),
+    );
+  });
+
+  child.on("exit", (code, signal) => {
+    serviceState.child = null;
+    serviceState.starting = false;
+    serviceState.stopping = false;
+    serviceState.startedAt = null;
+    serviceState.lastExit =
+      code === 0
+        ? "Clean exit from the Electron bridge"
+        : signal
+          ? `Exited after signal ${signal}`
+          : `Exited with code ${code ?? "unknown"}`;
+    markHeartbeat(serviceState, "idle");
+    appendManagedLogEntry(
+      serviceState.logs,
+      code === 0 ? "stdout" : "stderr",
+      createLogEntry(
+        code === 0 ? "info" : "error",
+        `Managed service ${service.name} exited (${serviceState.lastExit}).`,
+      ),
+    );
+  });
+}
+
+function isServiceRunning(serviceState) {
+  return Boolean(serviceState.child && serviceState.child.exitCode === null);
+}
+
+async function startManagedService(service) {
+  const serviceState = getManagedState(service.id);
+  if (isServiceRunning(serviceState)) {
+    return "Service is already running.";
+  }
+
+  serviceState.starting = true;
+  serviceState.stopping = false;
+  appendManagedLogEntry(
+    serviceState.logs,
+    "stdout",
+    createLogEntry("info", `Start requested for ${service.name}.`),
+  );
+
+  const child = spawn(service.command, service.args, {
+    cwd: resolveServiceCwd(service.cwd),
+    env: {
+      ...process.env,
+      ...service.env,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: process.platform !== "win32",
+  });
+
+  serviceState.child = child;
+  attachChildListeners(service, serviceState, child);
+  return `Started ${service.name}.`;
+}
+
+function waitForChildExit(child) {
+  return new Promise((resolve) => {
+    if (child.exitCode !== null) {
+      resolve();
+      return;
+    }
+
+    child.once("exit", () => resolve());
+  });
+}
+
+async function stopManagedService(service) {
+  const serviceState = getManagedState(service.id);
+  if (!isServiceRunning(serviceState)) {
+    return "Service is already stopped.";
+  }
+
+  serviceState.stopping = true;
+  appendManagedLogEntry(
+    serviceState.logs,
+    "stdout",
+    createLogEntry("warning", `Stop requested for ${service.name}.`),
+  );
+
+  const child = serviceState.child;
+
+  if (process.platform === "win32") {
+    child.kill("SIGTERM");
+  } else {
+    process.kill(-child.pid, "SIGTERM");
+  }
+
+  await Promise.race([
+    waitForChildExit(child),
+    delay(4000).then(() => {
+      if (child.exitCode === null) {
+        if (process.platform === "win32") {
+          child.kill("SIGKILL");
+        } else {
+          process.kill(-child.pid, "SIGKILL");
+        }
+      }
+    }),
+  ]);
+
+  return `Stopped ${service.name}.`;
+}
+
+async function restartManagedService(service) {
+  const serviceState = getManagedState(service.id);
+  serviceState.restartCount += 1;
+
+  if (isServiceRunning(serviceState)) {
+    await stopManagedService(service);
+  }
+
+  await startManagedService(service);
+  return `Restarted ${service.name}.`;
+}
+
+function buildAlerts(processes, ports, metrics, services) {
   const alerts = [];
   const conflictPorts = ports.filter((port) => port.status === "conflict");
   const publicPorts = ports.filter((port) => port.exposure === "public");
   const hotProcess = processes[0];
+  const stoppedManaged = services.filter((service) => {
+    const serviceState = getManagedState(service.id);
+    return !isServiceRunning(serviceState);
+  });
 
   if (conflictPorts.length > 0) {
     alerts.push({
@@ -413,6 +674,16 @@ function buildAlerts(processes, ports, metrics) {
     });
   }
 
+  if (stoppedManaged.length > 0) {
+    alerts.push({
+      id: "live-alert-managed",
+      title: "Managed service is parked",
+      detail: `${stoppedManaged[0].name} is registered with Mewl and ready to start from the desktop bridge.`,
+      severity: "info",
+      stamp: "now",
+    });
+  }
+
   if (alerts.length === 0) {
     alerts.push({
       id: "live-alert-quiet",
@@ -427,13 +698,15 @@ function buildAlerts(processes, ports, metrics) {
 }
 
 async function hydrateRuntimeSnapshot() {
-  const [cpuPercent, networkUsage, diskPercent, rawProcesses, rawBindings] = await Promise.all([
-    sampleCpuUsage(),
-    sampleNetworkUsage(),
-    readDiskUsage(),
-    readUserProcesses(),
-    readPortBindings(),
-  ]);
+  const [cpuPercent, networkUsage, diskPercent, rawProcesses, rawBindings, services] =
+    await Promise.all([
+      sampleCpuUsage(),
+      sampleNetworkUsage(),
+      readDiskUsage(),
+      readUserProcesses(),
+      readPortBindings(),
+      loadServiceDefinitions(),
+    ]);
 
   const memoryPercent = clamp(
     Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100),
@@ -441,6 +714,7 @@ async function hydrateRuntimeSnapshot() {
     100,
   );
 
+  const processByPid = new Map(rawProcesses.map((processRow) => [processRow.pid, processRow]));
   const portMap = new Map();
   for (const binding of rawBindings) {
     const list = portMap.get(binding.pid) ?? [];
@@ -448,61 +722,110 @@ async function hydrateRuntimeSnapshot() {
     portMap.set(binding.pid, list);
   }
 
+  const processLookup = new Map();
+  const managedPids = new Set();
+
+  const managedProcesses = services.map((service) => {
+    const serviceState = getManagedState(service.id);
+    const childPid = serviceState.child?.pid ?? null;
+    const liveProcess = childPid ? processByPid.get(childPid) ?? null : null;
+    const livePorts = childPid ? portMap.get(childPid) ?? [] : [];
+    const reservedPorts = Array.from(new Set([...service.ports, ...livePorts.map((item) => item.port)]));
+    const runtime = service.runtime || normalizeRuntime(service.command, service.args.join(" "));
+    const status = serviceState.starting
+      ? "starting"
+      : liveProcess
+        ? normalizeStatus(liveProcess.state)
+        : "stopped";
+
+    if (childPid) {
+      managedPids.add(childPid);
+    }
+
+    const record = {
+      id: service.id,
+      name: service.name,
+      group: service.group,
+      description: service.description,
+      command: [service.command, ...service.args].join(" "),
+      cwd: resolveServiceCwd(service.cwd),
+      runtime,
+      status,
+      pid: childPid,
+      ports: reservedPorts,
+      cpu: liveProcess ? clamp(liveProcess.cpu, 0, 100) : 0,
+      memory: liveProcess ? liveProcess.memoryMb : 0,
+      network: 0,
+      uptime: liveProcess ? formatElapsed(liveProcess.elapsed) : formatManagedElapsed(serviceState.startedAt),
+      restarts: serviceState.restartCount,
+      lastExit: serviceState.lastExit,
+      lastHeartbeat: liveProcess ? "live" : serviceState.lastHeartbeat,
+      autoStart: service.autoStart,
+      watchPorts: service.watchPorts,
+      managed: true,
+      logs: serviceState.logs,
+    };
+
+    if (childPid) {
+      processLookup.set(childPid, record);
+    }
+
+    return record;
+  });
+
   const selectedPids = new Set([
     ...rawProcesses.slice(0, processLimit).map((processRow) => processRow.pid),
     ...rawBindings.map((binding) => binding.pid),
   ]);
 
-  const selectedProcesses = rawProcesses
-    .filter((processRow) => selectedPids.has(processRow.pid))
-    .sort((left, right) => right.cpu + right.memoryMb / 25 - (left.cpu + left.memoryMb / 25));
+  const discoveredProcesses = rawProcesses
+    .filter((processRow) => selectedPids.has(processRow.pid) && !managedPids.has(processRow.pid))
+    .sort((left, right) => right.cpu + right.memoryMb / 25 - (left.cpu + left.memoryMb / 25))
+    .map((processRow) => {
+      const runtime = normalizeRuntime(processRow.command, processRow.args);
+      const group = normalizeGroup(runtime, processRow.cwd);
+      const processPorts = (portMap.get(processRow.pid) ?? []).map((binding) => binding.port);
+      const status = normalizeStatus(processRow.state);
+      const processRecord = {
+        id: `pid-${processRow.pid}`,
+        name: path.basename(processRow.command),
+        group,
+        description: processRow.cwd
+          ? `${runtime} process discovered from ${processRow.cwd}.`
+          : `${runtime} process discovered from the live host scan.`,
+        command: processRow.args,
+        cwd: processRow.cwd || "unknown",
+        runtime,
+        status,
+        pid: processRow.pid,
+        ports: processPorts,
+        cpu: clamp(processRow.cpu, 0, 100),
+        memory: processRow.memoryMb,
+        network: 0,
+        uptime: formatElapsed(processRow.elapsed),
+        restarts: 0,
+        lastExit: "Exit history is not available for discovered live processes.",
+        lastHeartbeat: "live",
+        autoStart: false,
+        watchPorts: processPorts.length > 0,
+        managed: false,
+        logs: {
+          stdout: [
+            createLogEntry(
+              "info",
+              `Discovered ${processRow.args} from the Electron host runtime scan.`,
+            ),
+          ],
+          stderr:
+            status === "degraded"
+              ? [createLogEntry("warning", "This process is reporting a non-running kernel state.")]
+              : [],
+        },
+      };
 
-  const processLookup = new Map();
-
-  const processes = selectedProcesses.map((processRow) => {
-    const runtime = normalizeRuntime(processRow.command, processRow.args);
-    const group = normalizeGroup(runtime, processRow.cwd);
-    const processPorts = (portMap.get(processRow.pid) ?? []).map((binding) => binding.port);
-    const status = normalizeStatus(processRow.state);
-    const processRecord = {
-      id: `pid-${processRow.pid}`,
-      name: path.basename(processRow.command),
-      group,
-      description: processRow.cwd
-        ? `${runtime} process discovered from ${processRow.cwd}.`
-        : `${runtime} process discovered from the live host scan.`,
-      command: processRow.args,
-      cwd: processRow.cwd || "unknown",
-      runtime,
-      status,
-      pid: processRow.pid,
-      ports: processPorts,
-      cpu: clamp(processRow.cpu, 0, 100),
-      memory: processRow.memoryMb,
-      network: 0,
-      uptime: formatElapsed(processRow.elapsed),
-      restarts: 0,
-      lastExit: "Exit history is not available for discovered live processes.",
-      lastHeartbeat: "live",
-      autoStart: false,
-      watchPorts: processPorts.length > 0,
-      logs: {
-        stdout: [
-          createLogEntry(
-            "info",
-            `Discovered ${processRow.args} from the Electron host runtime scan.`,
-          ),
-        ],
-        stderr:
-          status === "degraded"
-            ? [createLogEntry("warning", "This process is reporting a non-running kernel state.")]
-            : [],
-      },
-    };
-
-    processLookup.set(processRow.pid, processRecord);
-    return processRecord;
-  });
+      processLookup.set(processRow.pid, processRecord);
+      return processRecord;
+    });
 
   const portGroups = new Map();
   for (const binding of rawBindings) {
@@ -569,14 +892,59 @@ async function hydrateRuntimeSnapshot() {
   };
 
   return {
-    processes,
+    processes: [...managedProcesses, ...discoveredProcesses],
     ports,
-    alerts: buildAlerts(processes, ports, metrics),
+    alerts: buildAlerts([...managedProcesses, ...discoveredProcesses], ports, metrics, services),
     monitorMetrics: [metrics.cpu, metrics.memory, metrics.disk, metrics.network],
     automationRules: [],
   };
 }
 
+async function performProcessAction(action, processId) {
+  if (action === "scan") {
+    return {
+      snapshot: await hydrateRuntimeSnapshot(),
+      message: "Live host scan completed.",
+    };
+  }
+
+  const services = await loadServiceDefinitions();
+  const service = services.find((item) => item.id === processId);
+
+  if (!service) {
+    throw new Error("Only configured Mewl-managed services can be controlled from the desktop bridge.");
+  }
+
+  let message;
+  if (action === "start") {
+    message = await startManagedService(service);
+  } else if (action === "stop") {
+    message = await stopManagedService(service);
+  } else if (action === "restart") {
+    message = await restartManagedService(service);
+  } else {
+    throw new Error(`Unsupported action: ${action}`);
+  }
+
+  return {
+    snapshot: await hydrateRuntimeSnapshot(),
+    message,
+  };
+}
+
+async function shutdownManagedServices() {
+  const services = await loadServiceDefinitions();
+
+  for (const service of services) {
+    const serviceState = getManagedState(service.id);
+    if (isServiceRunning(serviceState)) {
+      await stopManagedService(service);
+    }
+  }
+}
+
 module.exports = {
   hydrateRuntimeSnapshot,
+  performProcessAction,
+  shutdownManagedServices,
 };

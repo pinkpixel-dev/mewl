@@ -1,6 +1,10 @@
 const path = require("node:path");
 const { app, BrowserWindow, ipcMain } = require("electron");
-const { hydrateRuntimeSnapshot } = require("./runtime.cjs");
+const {
+  hydrateRuntimeSnapshot,
+  performProcessAction,
+  shutdownManagedServices,
+} = require("./runtime.cjs");
 
 const devServerUrl = process.env.MEWL_RENDERER_URL;
 
@@ -32,6 +36,9 @@ function createWindow() {
 
 async function bootstrap() {
   ipcMain.handle("mewl:hydrate-runtime", async () => hydrateRuntimeSnapshot());
+  ipcMain.handle("mewl:process-action", async (_event, payload) =>
+    performProcessAction(payload.action, payload.processId),
+  );
 
   await app.whenReady();
   createWindow();
@@ -51,4 +58,8 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("before-quit", async () => {
+  await shutdownManagedServices();
 });

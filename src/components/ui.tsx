@@ -241,20 +241,27 @@ export function SweetToggle({
   checked,
   onChange,
   hex,
+  disabled = false,
 }: {
   label: string;
   checked: boolean;
   onChange: (next: boolean) => void;
   hex: string;
+  disabled?: boolean;
 }) {
   return (
-    <label className="flex items-center justify-between gap-4 rounded-[22px] border border-white/8 bg-[#0f141b]/94 px-4 py-4">
+    <label
+      className={`flex items-center justify-between gap-4 rounded-[22px] border border-white/8 bg-[#0f141b]/94 px-4 py-4 ${
+        disabled ? "opacity-55" : ""
+      }`}
+    >
       <p className="text-sm font-medium text-white/90">{label}</p>
-      <span className="relative inline-flex cursor-pointer items-center">
+      <span className={`relative inline-flex items-center ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
         <input
           type="checkbox"
           className="peer sr-only"
           checked={checked}
+          disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}
         />
         <span

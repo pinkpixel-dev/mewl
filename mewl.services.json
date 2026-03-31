@@ -1,0 +1,18 @@
+{
+  "services": [
+    {
+      "id": "workspace-sandbox",
+      "name": "workspace-sandbox",
+      "description": "Small managed HTTP server rooted at this repository so Mewl can exercise real lifecycle control without touching arbitrary host processes.",
+      "command": "python3",
+      "args": ["-m", "http.server", "4011", "--bind", "127.0.0.1"],
+      "cwd": ".",
+      "runtime": "python",
+      "group": "workspace",
+      "watchPorts": true,
+      "autoStart": false,
+      "ports": [4011],
+      "env": {}
+    }
+  ]
+}

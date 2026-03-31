@@ -259,6 +259,12 @@ function App() {
     );
   };
 
+  const applyRuntimeActionResult = (result: RuntimeActionResult) => {
+    applyRuntimeSnapshot(result.snapshot);
+    setCommandState(result.message);
+    setAlertsOpen(false);
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -598,9 +604,7 @@ function App() {
       startActionTransition(async () => {
         try {
           const result: RuntimeActionResult = await hostAction(action, selectedProcess?.id ?? "");
-          applyRuntimeSnapshot(result.snapshot);
-          setCommandState(result.message);
-          setAlertsOpen(false);
+          applyRuntimeActionResult(result);
         } catch (error) {
           setCommandState(
             error instanceof Error ? error.message : "The Electron bridge could not complete that action.",
@@ -850,6 +854,33 @@ function App() {
 
   const toggleRule = (ruleId: string, nextValue: boolean) => {
     const rule = automationRules.find((item) => item.id === ruleId);
+
+    if (isLiveElectronRuntime) {
+      const match = ruleId.match(/^service-(autostart|watch):(.+)$/);
+      const updateManagedService = window.mewlHost?.updateManagedService;
+
+      if (!match || !updateManagedService) {
+        setCommandState("This automation toggle is not wired to a live desktop setting yet.");
+        return;
+      }
+
+      const [, setting, processId] = match;
+      const updates =
+        setting === "autostart" ? { autoStart: nextValue } : { watchPorts: nextValue };
+
+      startActionTransition(async () => {
+        try {
+          const result = await updateManagedService(processId, updates);
+          applyRuntimeActionResult(result);
+        } catch (error) {
+          setCommandState(
+            error instanceof Error ? error.message : "The desktop bridge could not save that rule.",
+          );
+        }
+      });
+      return;
+    }
+
     setAutomationRules((current) =>
       current.map((item) => (item.id === ruleId ? { ...item, enabled: nextValue } : item)),
     );
@@ -1028,6 +1059,33 @@ function App() {
             label="Autostart"
             checked={selectedProcess.autoStart}
             onChange={(next) => {
+              if (isLiveElectronRuntime) {
+                const updateManagedService = window.mewlHost?.updateManagedService;
+
+                if (!selectedProcess.managed || !updateManagedService) {
+                  setCommandState(
+                    "Only configured Mewl-managed services can change autostart in the desktop shell.",
+                  );
+                  return;
+                }
+
+                startActionTransition(async () => {
+                  try {
+                    const result = await updateManagedService(selectedProcess.id, {
+                      autoStart: next,
+                    });
+                    applyRuntimeActionResult(result);
+                  } catch (error) {
+                    setCommandState(
+                      error instanceof Error
+                        ? error.message
+                        : "The desktop bridge could not save the autostart setting.",
+                    );
+                  }
+                });
+                return;
+              }
+
               updateSelectedProcess((process) => ({ ...process, autoStart: next }));
               appendProcessLogs(selectedProcess.id, [
                 {
@@ -1043,12 +1101,39 @@ function App() {
               );
             }}
             hex={accent.rose}
-            disabled={isLiveElectronRuntime}
+            disabled={isLiveElectronRuntime && !selectedProcess.managed}
           />
           <SweetToggle
             label="Watch ports"
             checked={selectedProcess.watchPorts}
             onChange={(next) => {
+              if (isLiveElectronRuntime) {
+                const updateManagedService = window.mewlHost?.updateManagedService;
+
+                if (!selectedProcess.managed || !updateManagedService) {
+                  setCommandState(
+                    "Only configured Mewl-managed services can change watch-port settings in the desktop shell.",
+                  );
+                  return;
+                }
+
+                startActionTransition(async () => {
+                  try {
+                    const result = await updateManagedService(selectedProcess.id, {
+                      watchPorts: next,
+                    });
+                    applyRuntimeActionResult(result);
+                  } catch (error) {
+                    setCommandState(
+                      error instanceof Error
+                        ? error.message
+                        : "The desktop bridge could not save the watch-port setting.",
+                    );
+                  }
+                });
+                return;
+              }
+
               updateSelectedProcess((process) => ({ ...process, watchPorts: next }));
               appendProcessLogs(selectedProcess.id, [
                 {
@@ -1064,7 +1149,7 @@ function App() {
               );
             }}
             hex={accent.purple}
-            disabled={isLiveElectronRuntime}
+            disabled={isLiveElectronRuntime && !selectedProcess.managed}
           />
         </div>
 

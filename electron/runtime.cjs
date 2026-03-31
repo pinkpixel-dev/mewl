@@ -465,6 +465,14 @@ async function loadServiceDefinitions() {
   }
 }
 
+async function saveServiceDefinitions(services) {
+  await fs.writeFile(
+    serviceConfigPath,
+    `${JSON.stringify({ services }, null, 2)}\n`,
+    "utf8",
+  );
+}
+
 function resolveServiceCwd(relativeCwd) {
   return path.resolve(process.cwd(), relativeCwd);
 }
@@ -573,6 +581,25 @@ function waitForChildExit(child) {
 
     child.once("exit", () => resolve());
   });
+}
+
+function buildAutomationRules(services) {
+  return services.flatMap((service) => [
+    {
+      id: `service-autostart:${service.id}`,
+      title: `${service.name} autostart`,
+      detail: `Launch ${service.name} automatically when the managed workspace boots.`,
+      cadence: "session start",
+      enabled: service.autoStart,
+    },
+    {
+      id: `service-watch:${service.id}`,
+      title: `${service.name} watch ports`,
+      detail: `Include ${service.name} in watched binding scans and collision summaries.`,
+      cadence: "live scan",
+      enabled: service.watchPorts,
+    },
+  ]);
 }
 
 async function stopManagedService(service) {
@@ -896,7 +923,7 @@ async function hydrateRuntimeSnapshot() {
     ports,
     alerts: buildAlerts([...managedProcesses, ...discoveredProcesses], ports, metrics, services),
     monitorMetrics: [metrics.cpu, metrics.memory, metrics.disk, metrics.network],
-    automationRules: [],
+    automationRules: buildAutomationRules(services),
   };
 }
 
@@ -932,6 +959,33 @@ async function performProcessAction(action, processId) {
   };
 }
 
+async function updateManagedService(processId, updates) {
+  const services = await loadServiceDefinitions();
+  const serviceIndex = services.findIndex((service) => service.id === processId);
+
+  if (serviceIndex === -1) {
+    throw new Error("Only configured Mewl-managed services can be edited from the desktop bridge.");
+  }
+
+  const nextService = {
+    ...services[serviceIndex],
+    autoStart:
+      typeof updates.autoStart === "boolean" ? updates.autoStart : services[serviceIndex].autoStart,
+    watchPorts:
+      typeof updates.watchPorts === "boolean"
+        ? updates.watchPorts
+        : services[serviceIndex].watchPorts,
+  };
+
+  services[serviceIndex] = nextService;
+  await saveServiceDefinitions(services);
+
+  return {
+    snapshot: await hydrateRuntimeSnapshot(),
+    message: `${nextService.name} settings updated.`,
+  };
+}
+
 async function shutdownManagedServices() {
   const services = await loadServiceDefinitions();
 
@@ -946,5 +1000,6 @@ async function shutdownManagedServices() {
 module.exports = {
   hydrateRuntimeSnapshot,
   performProcessAction,
+  updateManagedService,
   shutdownManagedServices,
 };

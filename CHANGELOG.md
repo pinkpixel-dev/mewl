@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 07:39 EDT
+
+- extended the Electron bridge so managed service settings can be updated from the renderer and persisted back to `mewl.services.json`
+- wired the inspector `Autostart` and `Watch ports` toggles to the real desktop config for managed services instead of leaving them read-only in Electron mode
+- generated live Electron automation rules from managed service settings so the Automation page now reflects and edits real config
+- verified the managed-setting round trip by updating `workspace-sandbox`, confirming the snapshot changed, and restoring the config afterward
+- revalidated the web build with a successful `npm run build`
+
 ## 2026-03-31 07:32 EDT
 
 - added config-driven managed services in `mewl.services.json` so Electron lifecycle actions only target processes Mewl explicitly owns

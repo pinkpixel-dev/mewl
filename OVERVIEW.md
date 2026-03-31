@@ -88,6 +88,7 @@ The current implementation:
 - maps the live host snapshot into the existing renderer-facing `RuntimeSnapshot` shape
 - loads `mewl.services.json` and manages only the services explicitly registered there
 - starts, stops, and restarts managed services through child-process ownership in the Electron main process
+- persists managed `autoStart` and `watchPorts` changes back into `mewl.services.json` through the preload bridge
 - keeps discovered host processes read-only so Mewl does not send lifecycle signals to processes it does not own
 
 ### `src/styles.css`
@@ -133,7 +134,7 @@ This structure keeps the app close to the original mockup mood while making the 
 ## Current Limitations
 
 - no native process bridge yet, so OS process control is not live
-- Electron is chosen as the host layer, but lifecycle control currently only covers services registered in `mewl.services.json`
+- Electron is chosen as the host layer, and lifecycle plus managed settings now cover services registered in `mewl.services.json`
 - no auth, multi-user roles, or workspace sync
 - no testing suite yet
 - no packaging for desktop delivery yet

@@ -31,6 +31,10 @@ export type MewlHostBridge = {
     action: "start" | "stop" | "restart" | "scan",
     processId: string,
   ) => Promise<RuntimeActionResult>;
+  updateManagedService?: (
+    processId: string,
+    updates: { autoStart?: boolean; watchPorts?: boolean },
+  ) => Promise<RuntimeActionResult>;
 };
 
 export type RuntimeActionResult = {

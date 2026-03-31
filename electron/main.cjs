@@ -4,6 +4,7 @@ const {
   hydrateRuntimeSnapshot,
   performProcessAction,
   shutdownManagedServices,
+  updateManagedService,
 } = require("./runtime.cjs");
 
 const devServerUrl = process.env.MEWL_RENDERER_URL;
@@ -38,6 +39,9 @@ async function bootstrap() {
   ipcMain.handle("mewl:hydrate-runtime", async () => hydrateRuntimeSnapshot());
   ipcMain.handle("mewl:process-action", async (_event, payload) =>
     performProcessAction(payload.action, payload.processId),
+  );
+  ipcMain.handle("mewl:update-managed-service", async (_event, payload) =>
+    updateManagedService(payload.processId, payload.updates),
   );
 
   await app.whenReady();

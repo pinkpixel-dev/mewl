@@ -6,6 +6,7 @@ import {
   useState,
   useTransition,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   Activity,
   ArrowUpRight,
@@ -31,6 +32,7 @@ import {
   Trash2,
   Waypoints,
   Workflow,
+  X,
 } from "lucide-react";
 import {
   CandyInput,
@@ -40,7 +42,6 @@ import {
   SignalBars,
   StatusPill,
   SugarCard,
-  SweetToggle,
 } from "./components/ui";
 import {
   type AlertRecord,
@@ -60,7 +61,6 @@ import {
   type ProcessLogLevel,
   type PortStatus,
   type ProcessStatus,
-  type RestartPolicy,
   type RuntimeSnapshot,
   type WorkspaceView,
 } from "./data/runtime";
@@ -237,16 +237,6 @@ const logLevelTextClassMap: Record<ProcessLogLevel, string> = {
   error: "text-rose-200",
 };
 
-const restartPolicyOptions: Array<{ id: RestartPolicy; label: string; detail: string }> = [
-  { id: "manual", label: "Manual", detail: "Only restart when you explicitly ask Mewl to do it." },
-  {
-    id: "on-failure",
-    label: "On Failure",
-    detail: "Retry automatically when the service exits with a code or signal that looks unhealthy.",
-  },
-  { id: "always", label: "Always", detail: "Try to bring the service back even after a clean exit." },
-];
-
 const automationOutcomeToneMap: Record<AutomationHistoryOutcome, "online" | "warning" | "offline"> = {
   success: "online",
   warning: "warning",
@@ -308,7 +298,7 @@ const createDraftFromManagedProcess = (process: ManagedProcess): ManagedServiceD
 
 const createDraftFromObservedProcess = (process: ManagedProcess): ManagedServiceDraft => ({
   name: process.name,
-  description: `Managed from the observed runtime on ${process.cwd}.`,
+  description: `Managed from the observed runtime for ${process.name}.`,
   startCommand: process.command,
   stopCommand: "",
   restartCommand: "",
@@ -421,6 +411,7 @@ function App() {
   const [expandedProcessIds, setExpandedProcessIds] = useState<string[]>([]);
   const [expandedResourceDrawIds, setExpandedResourceDrawIds] = useState<string[]>([]);
   const [managedEditorMode, setManagedEditorMode] = useState<"create" | "edit">("edit");
+  const [managedEditorOpen, setManagedEditorOpen] = useState(false);
   const [managedCleanupOnly, setManagedCleanupOnly] = useState(false);
   const [managedDraft, setManagedDraft] = useState<ManagedServiceDraft>(createEmptyManagedDraft);
   const [managedPrefillSourceId, setManagedPrefillSourceId] = useState("");
@@ -750,6 +741,7 @@ function App() {
     setSidebarCollapsed(false);
     setExpandedProcessIds([]);
     setManagedCleanupOnly(false);
+    setManagedEditorOpen(false);
     setAlertsOpen(false);
     setAlertSeverityFilter("all");
     setAlertServiceFilter("all");
@@ -791,6 +783,10 @@ function App() {
       return;
     }
 
+    if (!managedEditorOpen) {
+      return;
+    }
+
     if (selectedManagedService) {
       setManagedDraft(createDraftFromManagedProcess(selectedManagedService));
       setManagedPrefillSourceId("");
@@ -799,7 +795,28 @@ function App() {
 
     setManagedDraft(createEmptyManagedDraft());
     setManagedPrefillSourceId("");
-  }, [managedEditorMode, selectedManagedService]);
+  }, [managedEditorMode, managedEditorOpen, selectedManagedServiceId]);
+
+  useEffect(() => {
+    if (!managedEditorOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setManagedEditorOpen(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [managedEditorOpen]);
 
   const createProcessLogEntry = (level: ProcessLogLevel, text: string): ProcessLogEntry => ({
     id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1257,20 +1274,34 @@ function App() {
     }
   };
 
+  const openManagedCreateModal = (prefillSource?: ManagedProcess | null) => {
+    setManagedEditorMode("create");
+    setSelectedManagedServiceId("");
+    setManagedPrefillSourceId(prefillSource?.id ?? "");
+    setManagedDraft(prefillSource ? createDraftFromObservedProcess(prefillSource) : createEmptyManagedDraft());
+    if (prefillSource) {
+      setSelectedProcessId(prefillSource.id);
+    }
+    setManagedEditorOpen(true);
+  };
+
+  const openManagedEditModal = (process: ManagedProcess) => {
+    setManagedEditorMode("edit");
+    setSelectedManagedServiceId(process.id);
+    setSelectedProcessId(process.id);
+    setManagedPrefillSourceId("");
+    setManagedEditorOpen(true);
+  };
+
   const beginManagedDraftFromObservedProcess = (process: ManagedProcess) => {
     if (process.managed) {
       setCommandState("That process is already managed. Open it from the Managed workspace to edit the saved definition.");
       changeView("managed");
-      setManagedEditorMode("edit");
-      setSelectedManagedServiceId(process.id);
+      openManagedEditModal(process);
       return;
     }
 
-    setManagedEditorMode("create");
-    setSelectedManagedServiceId("");
-    setManagedPrefillSourceId(process.id);
-    setManagedDraft(createDraftFromObservedProcess(process));
-    setSelectedProcessId(process.id);
+    openManagedCreateModal(process);
     changeView("managed");
     setCommandState(
       `Prefilled a managed draft from observed process ${process.name}. Review the commands before saving it to Mewl.`,
@@ -1321,6 +1352,7 @@ function App() {
                 )?.id ?? selectedManagedServiceId
               : selectedManagedServiceId,
           );
+          setManagedEditorOpen(false);
         } catch (error) {
           setCommandState(
             error instanceof Error
@@ -1388,6 +1420,7 @@ function App() {
           applyRuntimeActionResult(result);
           setManagedEditorMode("create");
           setManagedDraft(createEmptyManagedDraft());
+          setManagedEditorOpen(false);
         } catch (error) {
           setCommandState(
             error instanceof Error
@@ -2147,88 +2180,96 @@ function App() {
   );
 
   const renderManagedPage = () => (
-    <section className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.92fr)]">
-      <div className={panelClass}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-white/42">Managed Services</p>
-            <h3 className="mt-2 text-2xl font-semibold text-white">Command Deck</h3>
-            <p className="mt-3 max-w-2xl text-sm text-white/56">
-              Save the services Mewl should know how to launch, stop, and restart for you. Live
-              ports, pid, heartbeat, and runtime state still hydrate from the host scan.
-            </p>
-          </div>
-          <ShinyButton
-            label="New Service"
-            hex={accent.rose}
-            icon={Plus}
-            subtle
-            onClick={() => {
-              setManagedEditorMode("create");
-              setSelectedManagedServiceId("");
-              setManagedPrefillSourceId("");
-              setManagedDraft(createEmptyManagedDraft());
-            }}
-          />
+    <section className={panelClass}>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.24em] text-white/42">Managed Services</p>
+          <h3 className="mt-2 text-2xl font-semibold text-white">Command Deck</h3>
+          <p className="mt-3 max-w-2xl text-sm text-white/56">
+            Fill the workspace with the services Mewl should manage, then open a lightweight editor
+            only when you need to adjust the saved command definition.
+          </p>
         </div>
+        <ShinyButton
+          label="New Service"
+          hex={accent.rose}
+          icon={Plus}
+          subtle
+          onClick={() => openManagedCreateModal()}
+        />
+      </div>
 
-        <div className="mt-6 space-y-3">
-          {managedServicesNeedingReview.length > 0 ? (
-            <div className="rounded-[24px] border border-amber-300/16 bg-amber-400/8 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p className="text-[0.72rem] uppercase tracking-[0.22em] text-amber-100/72">
-                    Legacy Config Cleanup
-                  </p>
-                  <p className="mt-2 max-w-2xl text-sm text-white/66">
-                    {managedServicesNeedingReview.length} managed service
-                    {managedServicesNeedingReview.length === 1 ? "" : "s"} were normalized from an
-                    older `mewl.services.json` shape and still need a quick review in the editor.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setManagedCleanupOnly((current) => !current)}
-                    className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition duration-300 ${
-                      managedCleanupOnly
-                        ? "border-amber-200/26 bg-amber-300/16 text-amber-50"
-                        : "border-white/8 bg-black/18 text-white/66 hover:text-white"
-                    }`}
-                  >
-                    {managedCleanupOnly ? "Show All" : "Show Cleanup Only"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const firstPending = managedServicesNeedingReview[0];
-                      if (!firstPending) {
-                        return;
-                      }
+      <div className="mt-6 flex flex-wrap gap-3">
+        {[
+          ["Managed", `${managedServices.length}`],
+          ["Autostart", `${autoStartCount}`],
+          ["Guarded", `${activeRestartPolicyCount}`],
+          ["Cleanup", `${managedServicesNeedingReview.length}`],
+        ].map(([label, value]) => (
+          <div
+            key={label}
+            className="rounded-[20px] border border-white/8 bg-black/18 px-4 py-3 text-sm"
+          >
+            <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">{label}</p>
+            <p className="mt-2 font-semibold text-white">{value}</p>
+          </div>
+        ))}
+      </div>
 
-                      setManagedEditorMode("edit");
-                      setSelectedManagedServiceId(firstPending.id);
-                      setSelectedProcessId(firstPending.id);
-                    }}
-                    className="rounded-full border border-white/8 bg-black/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
-                  >
-                    Review First
-                  </button>
-                </div>
+      <div className="mt-6 space-y-4">
+        {managedServicesNeedingReview.length > 0 ? (
+          <div className="rounded-[24px] border border-amber-300/16 bg-amber-400/8 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-[0.72rem] uppercase tracking-[0.22em] text-amber-100/72">
+                  Legacy Config Cleanup
+                </p>
+                <p className="mt-2 max-w-2xl text-sm text-white/66">
+                  {managedServicesNeedingReview.length} managed service
+                  {managedServicesNeedingReview.length === 1 ? "" : "s"} still need a quick review.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setManagedCleanupOnly((current) => !current)}
+                  className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition duration-300 ${
+                    managedCleanupOnly
+                      ? "border-amber-200/26 bg-amber-300/16 text-amber-50"
+                      : "border-white/8 bg-black/18 text-white/66 hover:text-white"
+                  }`}
+                >
+                  {managedCleanupOnly ? "Show All" : "Show Cleanup Only"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const firstPending = managedServicesNeedingReview[0];
+                    if (firstPending) {
+                      openManagedEditModal(firstPending);
+                    }
+                  }}
+                  className="rounded-full border border-white/8 bg-black/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
+                >
+                  Review First
+                </button>
               </div>
             </div>
-          ) : null}
+          </div>
+        ) : null}
 
-          {visibleManagedServices.length > 0 ? (
-            visibleManagedServices.map((process) => {
-              const isSelected = selectedManagedService?.id === process.id && managedEditorMode === "edit";
+        {visibleManagedServices.length > 0 ? (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {visibleManagedServices.map((process) => {
+              const isSelected =
+                selectedManagedService?.id === process.id && managedEditorMode === "edit" && managedEditorOpen;
               const titleHex = managedServiceColorMap[process.titleColor ?? "default"];
               const Icon = managedServiceIconMap[process.icon ?? "server"];
 
               return (
                 <article
                   key={process.id}
-                  className="rounded-[28px] border border-white/8 bg-[#0f141b]/94 p-4 transition duration-300"
+                  className="rounded-[28px] border border-white/8 bg-[#0f141b]/94 p-5 transition duration-300"
                   style={
                     isSelected
                       ? ({
@@ -2238,15 +2279,7 @@ function App() {
                   }
                 >
                   <div className="flex items-start justify-between gap-4">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setManagedEditorMode("edit");
-                        setSelectedManagedServiceId(process.id);
-                        setSelectedProcessId(process.id);
-                      }}
-                      className="flex min-w-0 flex-1 items-start gap-4 text-left"
-                    >
+                    <div className="flex min-w-0 flex-1 items-start gap-4">
                       <span
                         className="grid size-12 shrink-0 place-items-center rounded-[20px] border border-white/10 bg-black/18"
                         style={{
@@ -2256,21 +2289,18 @@ function App() {
                       >
                         <Icon size={20} />
                       </span>
-                      <span className="min-w-0">
-                        <span
-                          className="block truncate text-lg font-semibold"
-                          style={{ color: titleHex }}
-                        >
+                      <div className="min-w-0">
+                        <p className="truncate text-lg font-semibold" style={{ color: titleHex }}>
                           {process.name}
-                        </span>
-                        <span className="mt-1 block text-sm text-white/54">
+                        </p>
+                        <p className="mt-1 text-sm text-white/54">
                           {process.description || "No description yet."}
-                        </span>
-                        <span className="mt-3 block truncate font-mono text-xs text-white/34">
+                        </p>
+                        <p className="mt-3 truncate font-mono text-xs text-white/34">
                           {process.startCommand ?? process.command}
-                        </span>
-                      </span>
-                    </button>
+                        </p>
+                      </div>
+                    </div>
 
                     <div className="flex flex-col items-end gap-2">
                       <StatusPill tone={processToneMap[process.status]} label={process.status} />
@@ -2291,7 +2321,7 @@ function App() {
                     </div>
                   ) : null}
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
                     {[
                       ["PID", process.pid ? `${process.pid}` : "idle"],
                       ["Ports", process.ports.length > 0 ? process.ports.join(", ") : "none"],
@@ -2331,376 +2361,330 @@ function App() {
                         label: "Edit service",
                         icon: PenSquare,
                         hex: titleHex,
-                        onClick: () => {
-                          setManagedEditorMode("edit");
-                          setSelectedManagedServiceId(process.id);
-                        },
+                        onClick: () => openManagedEditModal(process),
                       })}
                     </div>
                   </div>
                 </article>
               );
-            })
-          ) : (
-            <div className="rounded-[28px] border border-dashed border-white/10 bg-black/18 px-5 py-8 text-sm text-white/52">
-              {managedCleanupOnly
-                ? "No managed services still need cleanup review right now. Switch back to the full command deck to see every saved service."
-                : "Create your first managed service to give Mewl a real launch definition instead of relying on a discovered process snapshot."}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className={panelClass}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-white/42">
-              {managedEditorMode === "create"
-                ? managedPrefillSource
-                  ? "Create Managed Service From Observed Runtime"
-                  : "Create Managed Service"
-                : "Edit Managed Service"}
-            </p>
-            <h3 className="mt-2 text-2xl font-semibold text-white">
-              {managedEditorMode === "create"
-                ? managedPrefillSource
-                  ? "Review the observed draft"
-                  : "Author a launch definition"
-                : selectedManagedService?.name ?? "Managed editor"}
-            </h3>
-            <p className="mt-3 text-sm text-white/56">
-              Keep the command honest here. Leave stop or restart blank when a tracked pid fallback
-              is good enough, or define explicit commands for Docker, wrappers, and custom flows.
-            </p>
+            })}
           </div>
-
-          {managedEditorMode === "edit" && selectedManagedService ? (
-            renderManagedActionButton({
-              label: "Remove managed service",
-              icon: Trash2,
-              hex: accent.rose,
-              onClick: removeManagedDraft,
-              disabled: isPending || runtimeStatus !== "ready",
-            })
-          ) : null}
-        </div>
-
-        <div className="mt-6 space-y-4">
-          {managedEditorMode === "create" && managedPrefillSource ? (
-            <div className="rounded-[24px] border border-rose-400/16 bg-rose-500/8 p-4">
-              <p className="text-[0.72rem] uppercase tracking-[0.22em] text-rose-100/72">
-                Prefilled From Observed Runtime
-              </p>
-              <p className="mt-2 text-sm text-white/62">
-                This draft was captured from the live process {managedPrefillSource.name} (pid{" "}
-                {managedPrefillSource.pid ?? "none"}). Review the command, working directory, and
-                optional stop or restart hooks before saving it as a managed definition.
-              </p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-3">
-                  <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">
-                    Observed Command
-                  </p>
-                  <p className="mt-2 break-all font-mono text-sm text-white/80">
-                    {managedPrefillSource.command}
-                  </p>
-                </div>
-                <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-3">
-                  <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">
-                    Observed Working Dir
-                  </p>
-                  <p className="mt-2 break-all font-mono text-sm text-white/80">
-                    {managedPrefillSource.cwd}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {managedEditorMode === "edit" && selectedManagedService?.review?.needsReview ? (
-            <div className="rounded-[24px] border border-amber-300/16 bg-amber-400/8 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p className="text-[0.72rem] uppercase tracking-[0.22em] text-amber-100/72">
-                    Cleanup This Imported Service
-                  </p>
-                  <p className="mt-2 text-sm text-white/66">
-                    This saved definition was normalized from an older `mewl.services.json` entry.
-                    Confirm the details below once they look right.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => confirmManagedReview(selectedManagedService.id)}
-                  disabled={isPending || runtimeStatus !== "ready"}
-                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition duration-300 ${
-                    isPending || runtimeStatus !== "ready"
-                      ? "cursor-not-allowed border-white/8 bg-black/18 text-white/34"
-                      : "border-amber-200/26 bg-amber-300/16 text-amber-50 hover:border-amber-100/36"
-                  }`}
-                >
-                  <ShieldCheck size={14} />
-                  Mark Reviewed
-                </button>
-              </div>
-              <div className="mt-4 grid gap-3">
-                {selectedManagedService.review.reasons.map((reason) => (
-                  <div
-                    key={reason}
-                    className="rounded-[18px] border border-white/8 bg-black/18 px-4 py-3 text-sm text-white/72"
-                  >
-                    {reason}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          <label className="block">
-            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">Name</p>
-            <input
-              className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
-              value={managedDraft.name}
-              onChange={(event) =>
-                setManagedDraft((current) => ({ ...current, name: event.target.value }))
-              }
-              placeholder="MyApp"
-            />
-          </label>
-
-          <label className="block">
-            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">Description</p>
-            <textarea
-              className="mt-2 min-h-[90px] w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
-              value={managedDraft.description}
-              onChange={(event) =>
-                setManagedDraft((current) => ({ ...current, description: event.target.value }))
-              }
-              placeholder="What this service does and why you keep it around."
-            />
-          </label>
-
-          <div className="grid gap-4">
-            <label className="block">
-              <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-                Start Command
-              </p>
-              <input
-                className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
-                value={managedDraft.startCommand}
-                onChange={(event) =>
-                  setManagedDraft((current) => ({
-                    ...current,
-                    startCommand: event.target.value,
-                  }))
-                }
-                placeholder="npm start"
-              />
-            </label>
-
-            <label className="block">
-              <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-                Stop Command
-              </p>
-              <input
-                className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
-                value={managedDraft.stopCommand}
-                onChange={(event) =>
-                  setManagedDraft((current) => ({ ...current, stopCommand: event.target.value }))
-                }
-                placeholder="Optional. Leave blank to stop by tracked pid."
-              />
-            </label>
-
-            <label className="block">
-              <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-                Restart Command
-              </p>
-              <input
-                className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
-                value={managedDraft.restartCommand}
-                onChange={(event) =>
-                  setManagedDraft((current) => ({
-                    ...current,
-                    restartCommand: event.target.value,
-                  }))
-                }
-                placeholder="Optional. Leave blank for stop/start."
-              />
-            </label>
+        ) : (
+          <div className="rounded-[28px] border border-dashed border-white/10 bg-black/18 px-5 py-8 text-sm text-white/52">
+            {managedCleanupOnly
+              ? "No managed services still need cleanup review right now. Switch back to the full command deck to see every saved service."
+              : "Create your first managed service to give Mewl a real launch definition instead of relying on a discovered process snapshot."}
           </div>
-
-          <label className="block">
-            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-              Working Directory
-            </p>
-            <input
-              className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
-              value={managedDraft.cwd}
-              onChange={(event) =>
-                setManagedDraft((current) => ({ ...current, cwd: event.target.value }))
-              }
-              placeholder="."
-            />
-          </label>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <SweetToggle
-              label="Autostart"
-              checked={managedDraft.autoStart}
-              onChange={(next) =>
-                setManagedDraft((current) => ({ ...current, autoStart: next }))
-              }
-              hex={accent.rose}
-            />
-            <SweetToggle
-              label="Watch ports"
-              checked={managedDraft.watchPorts}
-              onChange={(next) =>
-                setManagedDraft((current) => ({ ...current, watchPorts: next }))
-              }
-              hex={accent.purple}
-            />
-          </div>
-
-          <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
-            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-              Restart Policy
-            </p>
-            <div className="mt-4 grid gap-3">
-              {restartPolicyOptions.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() =>
-                    setManagedDraft((current) => ({ ...current, restartPolicy: option.id }))
-                  }
-                  className={`rounded-[18px] border px-4 py-4 text-left transition duration-300 ${
-                    managedDraft.restartPolicy === option.id
-                      ? "border-white/14 bg-black/26 text-white"
-                      : "border-white/8 bg-black/14 text-white/56 hover:text-white/82"
-                  }`}
-                >
-                  <p className="text-sm font-semibold">{option.label}</p>
-                  <p className="mt-1 text-sm text-white/56">{option.detail}</p>
-                </button>
-              ))}
-            </div>
-
-            {managedDraft.restartPolicy !== "manual" ? (
-              <label className="mt-4 block">
-                <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-                  Retry Limit
-                </p>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  className="mt-2 w-full rounded-[20px] border border-white/10 bg-black/18 px-4 py-3 text-sm text-white outline-none"
-                  value={managedDraft.restartLimit}
-                  onChange={(event) =>
-                    setManagedDraft((current) => ({
-                      ...current,
-                      restartLimit: Math.min(
-                        10,
-                        Math.max(1, Number.parseInt(event.target.value || "1", 10) || 1),
-                      ),
-                    }))
-                  }
-                />
-                <p className="mt-2 text-sm text-white/46">
-                  Mewl will stop retrying after this many automatic restart attempts in the current
-                  desktop session.
-                </p>
-              </label>
-            ) : null}
-          </div>
-
-          <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
-            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">Title Color</p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              {managedServiceColorOptions.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() =>
-                    setManagedDraft((current) => ({ ...current, titleColor: option.id }))
-                  }
-                  className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs uppercase tracking-[0.22em] transition duration-300 ${
-                    managedDraft.titleColor === option.id
-                      ? "border-white/16 bg-black/26 text-white"
-                      : "border-white/8 bg-black/14 text-white/48 hover:text-white/76"
-                  }`}
-                >
-                  <span
-                    className="size-3 rounded-full border border-white/10"
-                    style={{ backgroundColor: managedServiceColorMap[option.id] }}
-                  />
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
-            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">Card Icon</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {managedServiceIconOptions.map((option) => {
-                const Icon = managedServiceIconMap[option.id];
-                const selected = managedDraft.icon === option.id;
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => setManagedDraft((current) => ({ ...current, icon: option.id }))}
-                    className={`flex items-center gap-3 rounded-[18px] border px-3 py-3 text-left transition duration-300 ${
-                      selected
-                        ? "border-white/14 bg-black/26 text-white"
-                        : "border-white/8 bg-black/14 text-white/56 hover:text-white/82"
-                    }`}
-                  >
-                    <span className="grid size-10 place-items-center rounded-[16px] border border-white/10 bg-black/18">
-                      <Icon size={18} />
-                    </span>
-                    <span className="text-sm font-medium">{option.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="rounded-[24px] border border-dashed border-white/10 bg-black/18 px-4 py-4 text-sm text-white/46">
-            Commands are tokenized without a shell. Plain commands like `npm start`, `docker
-            compose up app`, and direct script paths work well. Shell operators such as pipes or
-            redirection are intentionally out of scope for this first pass.
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <ShinyButton
-              label={managedEditorMode === "create" ? "Create Service" : "Save Changes"}
-              hex={accent.rose}
-              icon={managedEditorMode === "create" ? Plus : PenSquare}
-              onClick={saveManagedDraft}
-              disabled={isPending || runtimeStatus !== "ready"}
-            />
-            {managedEditorMode === "create" ? null : (
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectedManagedService) {
-                    setManagedDraft(createDraftFromManagedProcess(selectedManagedService));
-                  }
-                }}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/18 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
-              >
-                Reset
-              </button>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     </section>
   );
+
+  const renderManagedEditorModal = () => {
+    if (!managedEditorOpen || typeof document === "undefined") {
+      return null;
+    }
+
+    return createPortal(
+      <div
+        className="fixed inset-0 z-[120] flex items-center justify-center bg-[#05070bcc]/90 px-4 py-6 backdrop-blur-md"
+        onClick={() => setManagedEditorOpen(false)}
+      >
+        <div
+          className="glass-panel max-h-[calc(100vh-3rem)] w-full max-w-[920px] overflow-hidden rounded-[34px]"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-white/8 px-5 py-5 sm:px-6">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-white/42">
+                {managedEditorMode === "create"
+                  ? managedPrefillSource
+                    ? "Create Managed Service From Observed Runtime"
+                    : "Create Managed Service"
+                  : "Edit Managed Service"}
+              </p>
+              <h3 className="mt-2 text-2xl font-semibold text-white">
+                {managedEditorMode === "create"
+                  ? managedPrefillSource
+                    ? "Review the observed draft"
+                    : "Author a launch definition"
+                  : selectedManagedService?.name ?? "Managed editor"}
+              </h3>
+              <p className="mt-3 max-w-2xl text-sm text-white/56">
+                Keep the form focused on the saved card definition. Live pid, ports, heartbeat, and
+                runtime state still hydrate straight from the host scan.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {managedEditorMode === "edit" && selectedManagedService ? (
+                renderManagedActionButton({
+                  label: "Remove managed service",
+                  icon: Trash2,
+                  hex: accent.rose,
+                  onClick: removeManagedDraft,
+                  disabled: isPending || runtimeStatus !== "ready",
+                })
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setManagedEditorOpen(false)}
+                className="grid size-10 place-items-center rounded-[18px] border border-white/10 bg-black/18 text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
+                aria-label="Close managed editor"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          <div className="max-h-[calc(100vh-11rem)] overflow-y-auto px-5 py-5 sm:px-6">
+            <div className="space-y-4">
+              {managedEditorMode === "create" && managedPrefillSource ? (
+                <div className="rounded-[24px] border border-rose-400/16 bg-rose-500/8 p-4">
+                  <p className="text-[0.72rem] uppercase tracking-[0.22em] text-rose-100/72">
+                    Prefilled From Observed Runtime
+                  </p>
+                  <p className="mt-2 text-sm text-white/62">
+                    This draft was captured from the live process {managedPrefillSource.name} (pid{" "}
+                    {managedPrefillSource.pid ?? "none"}). Review the command and optional stop or
+                    restart hooks before saving it as a managed definition.
+                  </p>
+                  <div className="mt-4 rounded-[18px] border border-white/8 bg-black/18 px-3 py-3">
+                    <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">
+                      Observed Command
+                    </p>
+                    <p className="mt-2 break-all font-mono text-sm text-white/80">
+                      {managedPrefillSource.command}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              {managedEditorMode === "edit" && selectedManagedService?.review?.needsReview ? (
+                <div className="rounded-[24px] border border-amber-300/16 bg-amber-400/8 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[0.72rem] uppercase tracking-[0.22em] text-amber-100/72">
+                        Cleanup This Imported Service
+                      </p>
+                      <p className="mt-2 text-sm text-white/66">
+                        This saved definition was normalized from an older `mewl.services.json`
+                        entry. Confirm the details below once they look right.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => confirmManagedReview(selectedManagedService.id)}
+                      disabled={isPending || runtimeStatus !== "ready"}
+                      className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition duration-300 ${
+                        isPending || runtimeStatus !== "ready"
+                          ? "cursor-not-allowed border-white/8 bg-black/18 text-white/34"
+                          : "border-amber-200/26 bg-amber-300/16 text-amber-50 hover:border-amber-100/36"
+                      }`}
+                    >
+                      <ShieldCheck size={14} />
+                      Mark Reviewed
+                    </button>
+                  </div>
+                  <div className="mt-4 grid gap-3">
+                    {selectedManagedService.review.reasons.map((reason) => (
+                      <div
+                        key={reason}
+                        className="rounded-[18px] border border-white/8 bg-black/18 px-4 py-3 text-sm text-white/72"
+                      >
+                        {reason}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
+                <div className="space-y-4">
+                  <label className="block">
+                    <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">Name</p>
+                    <input
+                      className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+                      value={managedDraft.name}
+                      onChange={(event) =>
+                        setManagedDraft((current) => ({ ...current, name: event.target.value }))
+                      }
+                      placeholder="MyApp"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                      Description
+                    </p>
+                    <textarea
+                      className="mt-2 min-h-[110px] w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+                      value={managedDraft.description}
+                      onChange={(event) =>
+                        setManagedDraft((current) => ({
+                          ...current,
+                          description: event.target.value,
+                        }))
+                      }
+                      placeholder="Optional note for what this service does."
+                    />
+                  </label>
+
+                  <label className="block">
+                    <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                      Start Command
+                    </p>
+                    <input
+                      className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
+                      value={managedDraft.startCommand}
+                      onChange={(event) =>
+                        setManagedDraft((current) => ({
+                          ...current,
+                          startCommand: event.target.value,
+                        }))
+                      }
+                      placeholder="npm run dev"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                      Stop Command
+                    </p>
+                    <input
+                      className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
+                      value={managedDraft.stopCommand}
+                      onChange={(event) =>
+                        setManagedDraft((current) => ({
+                          ...current,
+                          stopCommand: event.target.value,
+                        }))
+                      }
+                      placeholder="Optional. Leave blank to stop by tracked pid."
+                    />
+                  </label>
+
+                  <label className="block">
+                    <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                      Restart Command
+                    </p>
+                    <input
+                      className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
+                      value={managedDraft.restartCommand}
+                      onChange={(event) =>
+                        setManagedDraft((current) => ({
+                          ...current,
+                          restartCommand: event.target.value,
+                        }))
+                      }
+                      placeholder="Optional. Leave blank for stop/start."
+                    />
+                  </label>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+                    <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                      Title Color
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      {managedServiceColorOptions.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() =>
+                            setManagedDraft((current) => ({ ...current, titleColor: option.id }))
+                          }
+                          className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs uppercase tracking-[0.22em] transition duration-300 ${
+                            managedDraft.titleColor === option.id
+                              ? "border-white/16 bg-black/26 text-white"
+                              : "border-white/8 bg-black/14 text-white/48 hover:text-white/76"
+                          }`}
+                        >
+                          <span
+                            className="size-3 rounded-full border border-white/10"
+                            style={{ backgroundColor: managedServiceColorMap[option.id] }}
+                          />
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+                    <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                      Card Icon
+                    </p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {managedServiceIconOptions.map((option) => {
+                        const Icon = managedServiceIconMap[option.id];
+                        const selected = managedDraft.icon === option.id;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() =>
+                              setManagedDraft((current) => ({ ...current, icon: option.id }))
+                            }
+                            className={`flex items-center gap-3 rounded-[18px] border px-3 py-3 text-left transition duration-300 ${
+                              selected
+                                ? "border-white/14 bg-black/26 text-white"
+                                : "border-white/8 bg-black/14 text-white/56 hover:text-white/82"
+                            }`}
+                          >
+                            <span className="grid size-10 place-items-center rounded-[16px] border border-white/10 bg-black/18">
+                              <Icon size={18} />
+                            </span>
+                            <span className="text-sm font-medium">{option.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[24px] border border-dashed border-white/10 bg-black/18 px-4 py-4 text-sm text-white/46">
+                    Commands are tokenized without a shell. Plain commands like `npm start`,
+                    `docker compose up app`, and direct script paths work well.
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 border-t border-white/8 pt-4">
+                <ShinyButton
+                  label={managedEditorMode === "create" ? "Create Service" : "Save Changes"}
+                  hex={accent.rose}
+                  icon={managedEditorMode === "create" ? Plus : PenSquare}
+                  onClick={saveManagedDraft}
+                  disabled={isPending || runtimeStatus !== "ready"}
+                />
+                {managedEditorMode === "create" ? null : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedManagedService) {
+                        setManagedDraft(createDraftFromManagedProcess(selectedManagedService));
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/18 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
+                  >
+                    Reset
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setManagedEditorOpen(false)}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/18 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
+  };
 
   const renderPortsPage = () => (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.9fr)]">
@@ -3484,6 +3468,7 @@ function App() {
           {renderPage()}
         </main>
       </div>
+      {renderManagedEditorModal()}
     </div>
   );
 }

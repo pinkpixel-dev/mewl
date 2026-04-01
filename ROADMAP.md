@@ -142,6 +142,7 @@ This is the main UX split the product now points toward:
 - The alerts tray can now filter by severity, service, and time window, and the runtime raises richer alerts for crash loops, orphaned reserved ports, and unhealthy managed-service spikes.
 - The Monitor page now renders rolling trend visuals for CPU, memory, disk, network, and GPU using a live sample buffer instead of only one-off pressure bars.
 - The Monitor page now uses a wider banded layout, with the runtime waveform occupying the open sixth monitor tile so the primary workspace stays visually balanced on desktop.
+- The Managed workspace now uses a denser two-column card grid with modal editing, reducing the always-on form chrome and focusing the editor on the core command fields.
 
 ## Phase 5: Quality and Delivery
 

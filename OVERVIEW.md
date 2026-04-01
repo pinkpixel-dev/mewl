@@ -32,13 +32,13 @@ The current implementation includes:
 - a dedicated Processes page with expandable cards and a full inspector surface for live process inspection
 - improved wrapping rules on expanded process cards so long commands and filesystem paths stay contained within the card layout
 - explicit observed-runtime action panels that can prefill a managed draft or terminate only the current observed pid
-- a dedicated Managed page for explicit service definitions, lifecycle controls, and visual metadata
-- a managed cleanup banner, review badges, and editor actions for imported legacy service definitions that still need confirmation
+- a dedicated Managed page for explicit service definitions, lifecycle controls, and visual metadata, with editing now handled in a modal overlay instead of a permanent second column
+- a managed cleanup banner, review badges, and modal editor actions for imported legacy service definitions that still need confirmation
 - restart-policy controls in the managed editor so services can stay manual, retry on failure, or always come back with bounded attempts
-- a prefilled managed-draft review state that carries observed command and cwd context into the editor before anything is saved
+- a prefilled managed-draft review state that carries observed command context into the editor before anything is saved
 - explicit `managed` and `observed` ownership tags on process surfaces without extra warning copy cluttering the cards
 - a collapsed process-card layout that keeps the grid tidy by moving long command text into the expanded panel
-- the first shipped split between lighter live-process inspection and a dedicated `Managed` service editor for user-authored launch definitions
+- the first shipped split between lighter live-process inspection and a dedicated `Managed` service authoring flow for user-authored launch definitions
 - view-specific pages for port registry, monitor, and automation workflows
 - a cleaner Automation page that surfaces latest activity and runtime source inline instead of keeping a bulky secondary state column
 - a ports registry table with a wider target column and wrapping behavior for longer bind addresses
@@ -172,10 +172,11 @@ This structure keeps the app close to the original mockup mood while making the 
 - the workspace hydrates from the runtime contract and restores saved session state from local storage on boot
 - the sidebar can collapse to icon-only navigation for a roomier workspace
 - process cards can expand in place for more detail before the full inspector is needed
-- managed-service editor changes and automation toggles round-trip through the Electron bridge
+- managed-service modal edits and automation toggles round-trip through the Electron bridge
 - managed lifecycle actions and explicit command hooks append to stdout/stderr log tails from the live runtime
 - automation history now records manual actions, runtime autostarts, profile runs, unexpected exits, and policy retries so the Automation page can explain what happened
 - observed-process draft creation jumps directly into the Managed workspace with a review banner and prefilled launch details
+- the Managed workspace now prioritizes card density, using a two-column desktop grid with modal editing so the main surface stays filled with services instead of form chrome
 - observed-process termination is framed as a live pid action rather than a managed-service edit
 - button glow behavior follows Sparklebots interaction patterns
 - progress indicators and animated signal bars add motion without crowding the layout

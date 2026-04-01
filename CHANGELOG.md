@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 20:26 EDT
+
+- rebuilt the Managed workspace into a two-column service grid and replaced the always-open editor column with a modal create/edit window launched from the card actions
+- simplified the managed editor UI to the core service fields you asked for: name, optional description, start, stop, restart, color, and icon selection, while preserving the existing bridge-compatible defaults behind the scenes
+- hardened the new modal flow so background runtime refreshes do not clobber a draft while it is open
+- refreshed the README, overview, and roadmap to document the new Managed page workflow
+
 ## 2026-03-31 20:10 EDT
 
 - moved the Runtime Pulse card out of the sidebar and into the open sixth Trend Canvas slot so the monitor grid fills the desktop space more cleanly

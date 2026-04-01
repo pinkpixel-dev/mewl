@@ -23,6 +23,17 @@ const emptyManagedConfig = {
   profiles: [],
   history: [],
 };
+const managedServiceKinds = new Set(["command", "script", "docker"]);
+const scriptInterpreterByExtension = {
+  ".sh": "sh",
+  ".bash": "bash",
+  ".zsh": "zsh",
+  ".command": "sh",
+  ".py": "python3",
+  ".js": "node",
+  ".cjs": "node",
+  ".mjs": "node",
+};
 
 function uniqueList(values) {
   return Array.from(new Set(values.filter(Boolean)));
@@ -48,6 +59,29 @@ function delay(ms) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizeManagedServiceKind(value, commandLine = "") {
+  if (managedServiceKinds.has(value)) {
+    return value;
+  }
+
+  const command = String(commandLine || "").trim().toLowerCase();
+  if (!command) {
+    return "command";
+  }
+
+  if (command.startsWith("docker compose ") || command === "docker compose" || command.startsWith("docker-compose ")) {
+    return "docker";
+  }
+
+  const [firstToken = ""] = command.split(/\s+/);
+  const extension = path.extname(firstToken);
+  if (scriptInterpreterByExtension[extension]) {
+    return "script";
+  }
+
+  return "command";
 }
 
 function formatStamp(date = new Date()) {
@@ -293,10 +327,37 @@ async function resolveExecutable(command, envPath, cwd) {
   throw new Error(`Managed executable "${command}" is not available on the configured PATH.`);
 }
 
+async function resolveScriptCommand(command, args, envPath, cwd) {
+  const scriptPath = path.isAbsolute(command) ? command : path.resolve(cwd || process.cwd(), command);
+
+  if (!(await pathExists(scriptPath))) {
+    throw new Error(`Managed script not found: ${scriptPath}`);
+  }
+
+  const extension = path.extname(scriptPath).toLowerCase();
+  const interpreterName = scriptInterpreterByExtension[extension];
+  if (!interpreterName) {
+    return null;
+  }
+
+  const executable = await resolveExecutable(interpreterName, envPath, cwd);
+  return {
+    executable,
+    args: [scriptPath, ...args],
+  };
+}
+
 async function resolveCommandSpec(commandLine, envPath, cwd) {
   const [command, ...args] = parseCommandLine(commandLine);
   if (!command) {
     throw new Error("Managed services need a command before they can run.");
+  }
+
+  if (command.includes(path.sep) || command.startsWith(".")) {
+    const scriptCommand = await resolveScriptCommand(command, args, envPath, cwd);
+    if (scriptCommand) {
+      return scriptCommand;
+    }
   }
 
   const executable = await resolveExecutable(command, envPath, cwd);
@@ -557,6 +618,125 @@ function normalizeRuntime(command, args) {
   return command.toLowerCase();
 }
 
+function createDockerComposeStopCommand(commandLine) {
+  const tokens = parseCommandLine(commandLine);
+  if (tokens.length < 3) {
+    return "";
+  }
+
+  const usesLegacyCompose = tokens[0] === "docker-compose";
+  const composeIndex = usesLegacyCompose ? 0 : tokens[0] === "docker" && tokens[1] === "compose" ? 1 : -1;
+  if (composeIndex === -1) {
+    return "";
+  }
+
+  const upIndex = tokens.findIndex((token, index) => index > composeIndex && token === "up");
+  if (upIndex === -1) {
+    return "";
+  }
+
+  const composePrefix = usesLegacyCompose ? ["docker-compose"] : ["docker", "compose"];
+  const prefixOptions = tokens.slice(composeIndex + 1, upIndex);
+  const trailingTokens = tokens.slice(upIndex + 1);
+  const composeOptionsWithValues = new Set(["-f", "--file", "--project-directory", "-p", "--project-name", "--profile", "--env-file"]);
+  const upOnlyFlags = new Set([
+    "-d",
+    "--detach",
+    "--build",
+    "--force-recreate",
+    "--no-recreate",
+    "--renew-anon-volumes",
+    "--abort-on-container-exit",
+    "--abort-on-container-failure",
+    "--attach",
+    "--attach-dependencies",
+    "--always-recreate-deps",
+    "--menu",
+    "--no-attach",
+    "--no-build",
+    "--no-color",
+    "--no-deps",
+    "--no-log-prefix",
+    "--pull",
+    "--quiet-build",
+    "--quiet-pull",
+    "--remove-orphans",
+    "--scale",
+    "--timeout",
+    "--timestamps",
+    "--wait",
+    "--wait-timeout",
+  ]);
+
+  const serviceNames = [];
+  for (let index = 0; index < trailingTokens.length; index += 1) {
+    const token = trailingTokens[index];
+    if (!token.startsWith("-")) {
+      serviceNames.push(token);
+      continue;
+    }
+
+    if (composeOptionsWithValues.has(token)) {
+      index += 1;
+      continue;
+    }
+
+    if (upOnlyFlags.has(token)) {
+      if (token === "--scale" || token === "--attach" || token === "--no-attach" || token === "--profile" || token === "--env-file") {
+        index += 1;
+      }
+      continue;
+    }
+
+    return "";
+  }
+
+  return [...composePrefix, ...prefixOptions, "stop", ...serviceNames].join(" ");
+}
+
+function createDockerRunStopCommand(commandLine) {
+  const tokens = parseCommandLine(commandLine);
+  if (tokens.length < 2 || tokens[0] !== "docker" || tokens[1] !== "run") {
+    return "";
+  }
+
+  for (let index = 2; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === "--name" && typeof tokens[index + 1] === "string" && tokens[index + 1].length > 0) {
+      return `docker stop ${tokens[index + 1]}`;
+    }
+
+    if (token.startsWith("--name=")) {
+      const name = token.slice("--name=".length);
+      return name ? `docker stop ${name}` : "";
+    }
+  }
+
+  return "";
+}
+
+function getManagedStopCommand(service) {
+  const explicitStopCommand = typeof service.stopCommand === "string" ? service.stopCommand.trim() : "";
+  if (explicitStopCommand) {
+    return explicitStopCommand;
+  }
+
+  if (service.kind !== "docker") {
+    return "";
+  }
+
+  const startCommand = String(service.startCommand || "").trim();
+  if (!startCommand) {
+    return "";
+  }
+
+  try {
+    return createDockerComposeStopCommand(startCommand) || createDockerRunStopCommand(startCommand);
+  } catch (_error) {
+    return "";
+  }
+}
+
 function normalizeGroup(runtime, cwd) {
   if (cwd.includes("/PROJECTS/") || cwd.includes("/code/") || cwd.includes("/src/")) {
     return "workspace";
@@ -776,6 +956,7 @@ function sanitizeManagedService(service) {
 
   return {
     ...service,
+    kind: normalizeManagedServiceKind(service.kind, service.startCommand || service.command || ""),
     stopCommand: service.stopCommand ?? "",
     restartCommand: service.restartCommand ?? "",
   };
@@ -986,6 +1167,7 @@ async function loadManagedConfig() {
           typeof service.description === "string"
             ? service.description
             : "Managed command registered for the Mewl desktop bridge.",
+        kind: normalizeManagedServiceKind(service.kind, startCommand),
         startCommand,
         stopCommand:
           typeof service.stopCommand === "string" ? service.stopCommand.trim() : "",
@@ -1040,6 +1222,7 @@ async function loadManagedConfig() {
       normalizedServices.push(normalizedServiceWithReview);
 
       if (
+        normalizedServiceWithReview.kind !== normalizeManagedServiceKind(service.kind, startCommand) ||
         normalizedServiceWithReview.startCommand !== startCommand ||
         normalizedServiceWithReview.stopCommand !==
           (typeof service.stopCommand === "string" ? service.stopCommand.trim() : "") ||
@@ -1608,14 +1791,15 @@ function buildAutomationRules(services, profiles) {
 
 async function stopManagedService(service, source = "manual") {
   const serviceState = getManagedState(service.id);
-  if (service.stopCommand) {
+  const stopCommand = getManagedStopCommand(service);
+  if (stopCommand) {
     serviceState.stopping = true;
     appendManagedLogEntry(
       serviceState.logs,
       "stdout",
       createLogEntry("warning", `Stop requested for ${service.name}.`),
     );
-    await runManagedCommand(service, service.stopCommand, "Stop");
+    await runManagedCommand(service, stopCommand, "Stop");
 
     if (serviceState.child && serviceState.child.exitCode === null) {
       await Promise.race([waitForChildExit(serviceState.child), delay(4000)]);
@@ -1628,7 +1812,9 @@ async function stopManagedService(service, source = "manual") {
       detail:
         source === "profile"
           ? "A quiet-mode profile ran the configured stop flow."
-          : "Mewl ran the configured stop flow for this service.",
+          : service.kind === "docker" && !service.stopCommand
+            ? "Mewl derived a Docker-aware stop flow from the saved launch command."
+            : "Mewl ran the configured stop flow for this service.",
       outcome: "success",
       source,
       serviceId: service.id,
@@ -2100,6 +2286,7 @@ async function hydrateRuntimeSnapshot() {
     const livePorts = childPid ? portMap.get(childPid) ?? [] : [];
     const reservedPorts = Array.from(new Set([...service.ports, ...livePorts.map((item) => item.port)]));
     const runtime = service.runtime || normalizeRuntime(service.startCommand, "");
+    const stopCommand = getManagedStopCommand(service) || null;
     const status = serviceState.starting
       ? "starting"
       : liveProcess
@@ -2118,8 +2305,9 @@ async function hydrateRuntimeSnapshot() {
       command: service.startCommand,
       cwd: resolveServiceCwd(service.cwd),
       runtime,
+      kind: service.kind,
       startCommand: service.startCommand,
-      stopCommand: service.stopCommand || null,
+      stopCommand,
       restartCommand: service.restartCommand || null,
       status,
       pid: childPid,
@@ -2177,6 +2365,7 @@ async function hydrateRuntimeSnapshot() {
         command: processRow.args,
         cwd: processRow.cwd || "unknown",
         runtime,
+        kind: normalizeManagedServiceKind(runtime === "docker" ? "docker" : "command", processRow.args),
         status,
         pid: processRow.pid,
         ports: processPorts,
@@ -2374,6 +2563,7 @@ async function updateManagedService(processId, updates) {
       typeof updates.description === "string"
         ? updates.description.trim()
         : previousService.description,
+    kind: normalizeManagedServiceKind(updates.kind, startCommand),
     startCommand,
     stopCommand:
       typeof updates.stopCommand === "string"
@@ -2445,6 +2635,7 @@ async function createManagedService(service) {
       typeof service.description === "string" && service.description.trim().length > 0
         ? service.description.trim()
         : "Managed command registered for the Mewl desktop bridge.",
+    kind: normalizeManagedServiceKind(service.kind, startCommand),
     startCommand,
     stopCommand:
       typeof service.stopCommand === "string" ? service.stopCommand.trim() : "",

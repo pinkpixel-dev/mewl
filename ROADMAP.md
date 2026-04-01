@@ -110,17 +110,17 @@ This is the main UX split the product now points toward:
 
 #### 4.4 Script, wrapper, and Docker support
 
-- [ ] Support script-first and Docker-friendly service definitions so managed entries can launch through wrapper scripts, compose commands, container helpers, or custom stop hooks
-- [ ] Treat Docker start and stop flows as first-class managed actions instead of edge cases hidden behind generic command fields
-- [ ] Allow managed services to declare the exact launch and teardown scripts they need, with `pkill` or tracked-pid termination only as a fallback path
-- [ ] Make the editor flexible enough for shell scripts, package scripts, long-running workers, local daemons, and container-backed tools
+- [x] Support script-first and Docker-friendly service definitions so managed entries can launch through wrapper scripts, compose commands, container helpers, or custom stop hooks
+- [x] Treat Docker start and stop flows as first-class managed actions instead of edge cases hidden behind generic command fields
+- [x] Allow managed services to declare the exact launch and teardown scripts they need, with `pkill` or tracked-pid termination only as a fallback path
+- [x] Make the editor flexible enough for shell scripts, package scripts, long-running workers, local daemons, and container-backed tools
 
 #### 4.5 Mental model and labels
 
 - [x] Keep observed process killing separate from managed lifecycle controls so users always know whether they are stopping a live pid or invoking a saved service definition
 - [x] Make the sidebar and cards visually reinforce the split between `what is running` and `what Mewl can manage`
 - [x] Keep ports, status, and heartbeat auto-filled from runtime scans where possible, but keep the authoritative launch command and stop behavior user-authored in `Managed`
-- [ ] Treat Docker, scripts, and custom wrappers as first-class managed-service inputs rather than edge cases
+- [x] Treat Docker, scripts, and custom wrappers as first-class managed-service inputs rather than edge cases
 
 ### Phase 4 Planned UX Notes
 
@@ -145,6 +145,9 @@ This is the main UX split the product now points toward:
 - The Managed workspace now uses a denser two-column card grid with modal editing, reducing the always-on form chrome and focusing the editor on the core command fields.
 - The old Automation page has now been collapsed back into Managed, with `autostart` and `watch ports` toggles living directly on each managed service card.
 - Managed-card automation toggles now keep their explanatory copy in hover text so the service grid stays tighter.
+- Managed services now carry an explicit `command`, `script`, or `docker` mode, giving the editor first-class labels and guidance for wrapper scripts, direct script paths, and Docker flows.
+- Direct script paths such as `./scripts/dev.sh` and `./scripts/restart-dev.py` now resolve through interpreter-aware launch handling instead of requiring shell chaining to work reliably.
+- Docker-managed services can now present Docker-specific start, stop, and restart fields in the editor, and common `docker compose up ...` or named `docker run ...` launches can derive a Docker-aware stop flow when no explicit stop command is saved.
 
 ## Phase 5: Quality and Delivery
 

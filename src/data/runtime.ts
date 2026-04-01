@@ -36,6 +36,8 @@ export type ManagedServiceIcon =
   | "workflow"
   | "sparkles";
 
+export type ManagedServiceKind = "command" | "script" | "docker";
+
 export type ManagedServiceReview = {
   needsReview: boolean;
   source: "legacy-config";
@@ -65,6 +67,7 @@ export type ManagedProcess = {
   command: string;
   cwd: string;
   runtime: string;
+  kind: ManagedServiceKind;
   startCommand?: string;
   stopCommand?: string | null;
   restartCommand?: string | null;
@@ -92,6 +95,7 @@ export type ManagedProcess = {
 export type ManagedServiceDraft = {
   name: string;
   description: string;
+  kind: ManagedServiceKind;
   startCommand: string;
   stopCommand: string;
   restartCommand: string;

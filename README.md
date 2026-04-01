@@ -27,6 +27,9 @@ Mewl is a local operations dashboard for managing running services, watched port
 - Load live processes, listening ports, and host telemetry through an Electron preload bridge when running in the desktop shell
 - Start, stop, and restart Mewl-owned services through a config-driven Electron lifecycle bridge
 - Save managed services with explicit start commands, optional stop and restart commands, working directories, notes, colors, and card icons
+- Author managed services in explicit `command`, `script`, or `docker` modes so the editor can label each flow honestly instead of treating every launch as the same generic command
+- Launch direct script paths like `./scripts/dev.sh` or `./workers/boot.py` through the Electron bridge without having to wrap them in shell glue first
+- Let Docker-managed services use Docker-specific start, stop, and restart flows, with a derived stop command for common Compose and named-container launches when no explicit stop flow is saved
 - Review imported legacy managed-service entries from older `mewl.services.json` shapes, see why they were normalized, and mark them as cleaned up from the Managed modal editor
 - Choose per-service restart policies with retry limits so Mewl can recover managed services after unhealthy exits
 - Update managed `autostart` and `watch ports` settings from the UI and persist them back to `mewl.services.json`
@@ -64,8 +67,11 @@ This is the first real product pass, not the final native implementation yet.
 - Managed process launching, live port discovery, and host telemetry now run through the Electron preload bridge, with the Processes page staying focused on live inspection and the Managed page owning saved service control.
 - Managed-service configuration now lives in a per-user app config file instead of the repo, so packaged Electron builds can keep using the same settings location.
 - Managed services are now explicit saved definitions with a start command plus optional stop and restart commands instead of inferred promotion from the Processes page.
+- Managed services now also carry an explicit mode (`command`, `script`, or `docker`) so the editor, saved schema, and runtime stop behavior can match the kind of launch the user actually intends.
 - Legacy managed-service entries can now surface cleanup reasons in the Managed workspace so older config shapes are reviewed in-app instead of being silently rewritten with no follow-up.
 - Managed services can now opt into restart policies (`manual`, `on-failure`, or `always`) with bounded retry limits for the current desktop session.
+- Direct script-path launches now resolve through interpreter-aware runtime handling for common script types such as `.sh`, `.bash`, `.zsh`, `.py`, `.js`, `.cjs`, and `.mjs`.
+- Docker-managed services now expose Docker-first command labels in the editor, and common `docker compose up ...` or named `docker run ...` starts can derive a matching stop flow when the service definition leaves stop blank.
 - Observed processes can now seed the Managed editor through an explicit review step instead of being silently promoted straight into saved config.
 - The live Processes page now exposes only two observed-process actions: create a managed draft from what Mewl can currently see, or kill the live pid without changing the managed catalog.
 - The alerts tray is now filterable and uses richer runtime metadata so it can point to a specific service, time window, and alert category instead of staying as a flat feed.
@@ -170,6 +176,7 @@ The current product direction is intentionally utility-first rather than dashboa
 
 - collapsible left navigation rail for overview, processes, managed, ports, and monitor
 - a dedicated Managed workspace for user-authored service cards and lifecycle control, with editing moved into a modal window instead of a persistent side panel
+- a Managed editor that now understands `command`, `script`, and `docker` service modes instead of flattening every launch definition into one generic command form
 - compact operational header with search, scan, and alert tray instead of hero copy
 - the shared search field now uses the Pink Pixel rose accent for its icon and focus glow
 - clean overview dashboard with summary cards and short preview lists instead of oversized explainer surfaces
@@ -185,6 +192,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - service-level automation controls kept on the managed cards instead of a separate mostly-empty automation workspace
 - expandable monitor-side resource cards so long process command lines stay hidden until requested
 - a lean managed-service editor that focuses on name, description, start/stop/restart commands, color, and icon selection while deeper runtime fields stay out of the default UI
+- a managed-service editor that again exposes working directory and restart-policy controls alongside mode-specific command labels and examples
 - structured process logs and session memory so the shell feels more like a real local dashboard
 - a runtime source abstraction that boots only when the Electron bridge is available
 - a live Electron host bridge that can scan the current user session for processes, ports, and machine pressure
@@ -193,6 +201,8 @@ The current product direction is intentionally utility-first rather than dashboa
 - config-driven managed services so desktop lifecycle actions only touch processes Mewl explicitly owns
 - managed service settings that round-trip between the React UI and `mewl.services.json`
 - managed restart-policy settings that let the Electron bridge retry services after exits without guessing indefinitely
+- interpreter-aware script launches so direct wrapper files can be saved as first-class managed definitions without shell operators
+- Docker-aware stop derivation for common Compose and named-container flows when a saved Docker service omits its explicit teardown command
 - startup profiles that can boot or quiet groups of Mewl-owned services through the Electron bridge
 - a persisted automation history feed that explains what started, stopped, retried, failed, or was toggled and why
 - hardened managed service execution rules so the desktop bridge only launches validated commands with controlled environments

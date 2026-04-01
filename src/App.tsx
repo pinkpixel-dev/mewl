@@ -51,6 +51,7 @@ import {
   type ManagedServiceColor,
   type ManagedServiceDraft,
   type ManagedServiceIcon,
+  type ManagedServiceKind,
   type ManagedProcess,
   type ManagedServiceUpdate,
   type MonitorHistorySeries,
@@ -228,6 +229,78 @@ const managedServiceIconOptions: Array<{ id: ManagedServiceIcon; label: string }
   { id: "sparkles", label: "Sparkles" },
 ];
 
+const managedServiceKindOptions: Array<{
+  id: ManagedServiceKind;
+  label: string;
+  detail: string;
+}> = [
+  {
+    id: "command",
+    label: "Command",
+    detail: "Use for standard binaries, package scripts, workers, and local daemons.",
+  },
+  {
+    id: "script",
+    label: "Script",
+    detail: "Use for exact launch and teardown scripts, including direct file paths.",
+  },
+  {
+    id: "docker",
+    label: "Docker",
+    detail: "Use for Docker Compose or docker run flows with container-oriented stop behavior.",
+  },
+];
+
+const managedKindBadgeMap: Record<ManagedServiceKind, string> = {
+  command: "command",
+  script: "script",
+  docker: "docker",
+};
+
+const managedKindCopy: Record<
+  ManagedServiceKind,
+  {
+    startLabel: string;
+    stopLabel: string;
+    restartLabel: string;
+    startPlaceholder: string;
+    stopPlaceholder: string;
+    restartPlaceholder: string;
+    guidance: string;
+  }
+> = {
+  command: {
+    startLabel: "Start Command",
+    stopLabel: "Stop Command",
+    restartLabel: "Restart Command",
+    startPlaceholder: "npm run dev",
+    stopPlaceholder: "Optional. Leave blank to stop by tracked pid.",
+    restartPlaceholder: "Optional. Leave blank for stop/start.",
+    guidance:
+      "Best for package scripts, local binaries, background workers, and long-running dev servers.",
+  },
+  script: {
+    startLabel: "Launch Script",
+    stopLabel: "Teardown Script",
+    restartLabel: "Restart Script",
+    startPlaceholder: "./scripts/dev.sh --watch",
+    stopPlaceholder: "Optional. Example: ./scripts/stop-dev.sh",
+    restartPlaceholder: "Optional. Example: ./scripts/restart-dev.sh",
+    guidance:
+      "Direct script paths are now first-class. Mewl resolves common script extensions without requiring shell chaining.",
+  },
+  docker: {
+    startLabel: "Docker Start Flow",
+    stopLabel: "Docker Stop Flow",
+    restartLabel: "Docker Restart Flow",
+    startPlaceholder: "docker compose up api",
+    stopPlaceholder: "Optional. Example: docker compose stop api",
+    restartPlaceholder: "Optional. Example: docker compose restart api",
+    guidance:
+      "Use explicit Docker commands when you have them. If stop is blank, Mewl can derive a safe Docker stop flow for common compose and named-container launches.",
+  },
+};
+
 const logLevelTextClassMap: Record<ProcessLogLevel, string> = {
   info: "text-emerald-200",
   debug: "text-cyan-200",
@@ -261,6 +334,7 @@ const parseAlertAgeHours = (stamp: string) => {
 const createEmptyManagedDraft = (): ManagedServiceDraft => ({
   name: "",
   description: "",
+  kind: "command",
   startCommand: "",
   stopCommand: "",
   restartCommand: "",
@@ -276,6 +350,7 @@ const createEmptyManagedDraft = (): ManagedServiceDraft => ({
 const createDraftFromManagedProcess = (process: ManagedProcess): ManagedServiceDraft => ({
   name: process.name,
   description: process.description,
+  kind: process.kind,
   startCommand: process.startCommand ?? process.command,
   stopCommand: process.stopCommand ?? "",
   restartCommand: process.restartCommand ?? "",
@@ -291,6 +366,7 @@ const createDraftFromManagedProcess = (process: ManagedProcess): ManagedServiceD
 const createDraftFromObservedProcess = (process: ManagedProcess): ManagedServiceDraft => ({
   name: process.name,
   description: `Managed from the observed runtime for ${process.name}.`,
+  kind: process.runtime === "docker" ? "docker" : "command",
   startCommand: process.command,
   stopCommand: "",
   restartCommand: "",
@@ -418,6 +494,7 @@ function App() {
   const [isPending, startActionTransition] = useTransition();
   const runtimeSource = getRuntimeSourceDescriptor();
   const isLiveElectronRuntime = runtimeSource.id === "electron";
+  const managedKindMeta = managedKindCopy[managedDraft.kind];
 
   const applyRuntimeSnapshot = (snapshot: RuntimeSnapshot) => {
     setProcesses(snapshot.processes);
@@ -1252,6 +1329,13 @@ function App() {
       </span>
     ) : null;
 
+  const renderManagedKindTag = (process: ManagedProcess) =>
+    process.managed ? (
+      <span className="rounded-full border border-white/8 bg-black/18 px-3 py-1 text-[0.68rem] uppercase tracking-[0.2em] text-white/48">
+        {managedKindBadgeMap[process.kind]}
+      </span>
+    ) : null;
+
   const focusManagedServiceFromSnapshot = (snapshot: RuntimeSnapshot, processId: string) => {
     const matchedProcess =
       snapshot.processes.find((item) => item.id === processId && item.managed) ??
@@ -1300,6 +1384,27 @@ function App() {
 
   const saveManagedDraft = () => {
     if (runtimeStatus !== "ready") {
+      return;
+    }
+
+    if (!managedDraft.name.trim()) {
+      setCommandState("Managed services need a name before they can be saved.");
+      return;
+    }
+
+    if (!managedDraft.startCommand.trim()) {
+      setCommandState(
+        managedDraft.kind === "script"
+          ? "Script-based services need a launch script or command before they can be saved."
+          : managedDraft.kind === "docker"
+            ? "Docker-managed services need a start flow before they can be saved."
+            : "Managed services need a start command before they can be saved.",
+      );
+      return;
+    }
+
+    if (!managedDraft.cwd.trim()) {
+      setCommandState("Managed services need a working directory before they can be saved.");
       return;
     }
 
@@ -1679,6 +1784,7 @@ function App() {
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <StatusPill tone={processToneMap[selectedProcess.status]} label={selectedProcess.status} />
           {renderProcessOwnershipTag(selectedProcess)}
+          {renderManagedKindTag(selectedProcess)}
           <span className="rounded-full border border-white/8 bg-black/18 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/48">
             pid {selectedProcess.pid ?? "none"}
           </span>
@@ -2291,6 +2397,7 @@ function App() {
                     <div className="flex flex-col items-end gap-2">
                       <StatusPill tone={processToneMap[process.status]} label={process.status} />
                       {renderManagedReviewTag(process)}
+                      {renderManagedKindTag(process)}
                       {renderProcessOwnershipTag(process)}
                     </div>
                   </div>
@@ -2457,10 +2564,6 @@ function App() {
                     : "Author a launch definition"
                   : selectedManagedService?.name ?? "Managed editor"}
               </h3>
-              <p className="mt-3 max-w-2xl text-sm text-white/56">
-                Keep the form focused on the saved card definition. Live pid, ports, heartbeat, and
-                runtime state still hydrate straight from the host scan.
-              </p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -2548,6 +2651,43 @@ function App() {
 
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
                 <div className="space-y-4">
+                  <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+                    <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                      Service Mode
+                    </p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      {managedServiceKindOptions.map((option) => {
+                        const selected = managedDraft.kind === option.id;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() =>
+                              setManagedDraft((current) => ({
+                                ...current,
+                                kind: option.id,
+                                icon:
+                                  option.id === "docker"
+                                    ? "workflow"
+                                    : current.icon === "workflow"
+                                      ? "server"
+                                      : current.icon,
+                              }))
+                            }
+                            className={`rounded-[18px] border px-4 py-4 text-left transition duration-300 ${
+                              selected
+                                ? "border-white/14 bg-black/26 text-white"
+                                : "border-white/8 bg-black/14 text-white/56 hover:text-white/82"
+                            }`}
+                          >
+                            <p className="text-sm font-semibold">{option.label}</p>
+                            <p className="mt-2 text-xs leading-5 text-white/48">{option.detail}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <label className="block">
                     <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">Name</p>
                     <input
@@ -2579,7 +2719,7 @@ function App() {
 
                   <label className="block">
                     <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-                      Start Command
+                      {managedKindMeta.startLabel}
                     </p>
                     <input
                       className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
@@ -2590,13 +2730,13 @@ function App() {
                           startCommand: event.target.value,
                         }))
                       }
-                      placeholder="npm run dev"
+                      placeholder={managedKindMeta.startPlaceholder}
                     />
                   </label>
 
                   <label className="block">
                     <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-                      Stop Command
+                      {managedKindMeta.stopLabel}
                     </p>
                     <input
                       className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
@@ -2607,13 +2747,13 @@ function App() {
                           stopCommand: event.target.value,
                         }))
                       }
-                      placeholder="Optional. Leave blank to stop by tracked pid."
+                      placeholder={managedKindMeta.stopPlaceholder}
                     />
                   </label>
 
                   <label className="block">
                     <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-                      Restart Command
+                      {managedKindMeta.restartLabel}
                     </p>
                     <input
                       className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
@@ -2624,12 +2764,102 @@ function App() {
                           restartCommand: event.target.value,
                         }))
                       }
-                      placeholder="Optional. Leave blank for stop/start."
+                      placeholder={managedKindMeta.restartPlaceholder}
+                    />
+                  </label>
+
+                  <label className="block">
+                    <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                      Working Directory
+                    </p>
+                    <input
+                      className="mt-2 w-full rounded-[20px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-white/30"
+                      value={managedDraft.cwd}
+                      onChange={(event) =>
+                        setManagedDraft((current) => ({
+                          ...current,
+                          cwd: event.target.value,
+                        }))
+                      }
+                      placeholder="."
                     />
                   </label>
                 </div>
 
                 <div className="space-y-4">
+                  <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+                    <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                      Mode Guidance
+                    </p>
+                    <p className="mt-3 text-sm leading-6 text-white/60">{managedKindMeta.guidance}</p>
+                  </div>
+
+                  <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+                    <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                      Restart Policy
+                    </p>
+                    <div className="mt-4 grid gap-3">
+                      {[
+                        {
+                          id: "manual",
+                          label: "Manual",
+                          detail: "Only restart this service when you explicitly ask Mewl to do it.",
+                        },
+                        {
+                          id: "on-failure",
+                          label: "On Failure",
+                          detail: "Retry after non-zero exits or signals, up to the retry limit below.",
+                        },
+                        {
+                          id: "always",
+                          label: "Always",
+                          detail: "Bring the service back after every exit until the retry limit is reached.",
+                        },
+                      ].map((option) => {
+                        const selected = managedDraft.restartPolicy === option.id;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() =>
+                              setManagedDraft((current) => ({
+                                ...current,
+                                restartPolicy: option.id as ManagedServiceDraft["restartPolicy"],
+                              }))
+                            }
+                            className={`rounded-[18px] border px-4 py-3 text-left transition duration-300 ${
+                              selected
+                                ? "border-white/14 bg-black/26 text-white"
+                                : "border-white/8 bg-black/14 text-white/56 hover:text-white/82"
+                            }`}
+                          >
+                            <p className="text-sm font-semibold">{option.label}</p>
+                            <p className="mt-2 text-xs leading-5 text-white/48">{option.detail}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <label className="mt-4 block">
+                      <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                        Retry Limit
+                      </p>
+                      <input
+                        type="number"
+                        min={1}
+                        max={10}
+                        className="mt-2 w-full rounded-[20px] border border-white/10 bg-black/18 px-4 py-3 text-sm text-white outline-none"
+                        value={managedDraft.restartLimit}
+                        onChange={(event) =>
+                          setManagedDraft((current) => ({
+                            ...current,
+                            restartLimit: Number.parseInt(event.target.value, 10) || 1,
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+
                   <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
                     <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
                       Title Color
@@ -2691,7 +2921,8 @@ function App() {
 
                   <div className="rounded-[24px] border border-dashed border-white/10 bg-black/18 px-4 py-4 text-sm text-white/46">
                     Commands are tokenized without a shell. Plain commands like `npm start`,
-                    `docker compose up app`, and direct script paths work well.
+                    `docker compose up app`, and direct script paths like `./scripts/dev.sh` work
+                    well here.
                   </div>
                 </div>
               </div>

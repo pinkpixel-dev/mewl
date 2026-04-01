@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 22:17 EDT
+
+- added explicit managed service modes for `command`, `script`, and `docker`, including mode-specific editor labels, guidance, and saved runtime metadata
+- restored working-directory and restart-policy controls inside the Managed modal so roadmap-promised service definitions are editable again from the UI
+- taught the Electron runtime to launch direct script paths through interpreter-aware resolution for common shell, Python, and Node script extensions
+- added Docker-aware fallback stop derivation for common `docker compose up ...` and named `docker run ...` managed services when no explicit stop command is saved
+- refreshed the README, overview, and roadmap to document the completed script-first and Docker-first managed-service slice
+- revalidated the app with a successful `npm run build`
+
 ## 2026-03-31 20:45 EDT
 
 - removed the always-visible helper text under the managed-card `autostart` and `watch ports` toggles and moved that guidance into hover text instead

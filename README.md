@@ -41,6 +41,7 @@ Mewl is a local operations dashboard for managing running services, watched port
 - Launch managed services through a hardened Electron runner with explicit env inheritance, command tokenization, PATH resolution, and reserved-port guards
 - Reattach orphaned managed services that are already running on the host so lifecycle actions can reclaim and control them cleanly
 - Normalize accidental helper-process promotions back to a single managed entry so repeated `Manage` clicks on child processes do not create confusing duplicates in the saved config
+- Generate Linux packaging icons directly from `public/icon.png` and build AppImage, `.deb`, and `.rpm` artifacts from one Electron packaging flow
 - Review a port registry with exposure, conflict, and watched-binding states
 - Track host CPU, memory, disk, network, and GPU pressure from the sidebar and monitor view
 - Recover gracefully with loading, empty, and error states while the workspace runtime hydrates
@@ -55,6 +56,7 @@ Mewl is a local operations dashboard for managing running services, watched port
 - Vite 8
 - Tailwind CSS 4
 - lucide-react
+- Electron Builder
 
 ## Current Reality
 
@@ -80,6 +82,8 @@ This is the first real product pass, not the final native implementation yet.
 - The Managed page now keeps the workspace focused on a two-column service grid, with create and edit actions opening a modal instead of pinning a full editor column on the screen.
 - The old standalone Automation page has been folded away, and the service-level `autostart` and `watch ports` settings now live directly on the managed cards.
 - Managed card toggle help now lives in hover text instead of taking up persistent space inside each card.
+- Linux desktop packaging is now wired through `electron-builder`, with generated icon assets and package commands for AppImage, `.deb`, and `.rpm`.
+- A manual GitHub Actions workflow now exists for Linux package builds and artifact upload, while Windows packaging remains intentionally out of scope until the runtime bridge itself becomes cross-platform.
 
 ## Run Locally
 
@@ -123,6 +127,14 @@ npm run desktop
 
 `npm run desktop` now rebuilds the Vite renderer before launch, and the production bundle emits relative asset paths so Electron can load `dist/index.html` over `file://` without dropping to a blank window.
 
+Build Linux desktop packages:
+
+```bash
+npm run package:linux
+```
+
+That packaging flow regenerates icons from [`public/icon.png`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/public/icon.png), rebuilds the renderer, and emits AppImage, `.deb`, and `.rpm` artifacts into `release/`.
+
 Managed desktop services are stored in a per-user config file:
 
 - Linux: `~/.config/mewl/mewl.services.json`
@@ -139,9 +151,19 @@ Managed service launches are now intentionally strict: Mewl tokenizes plain comm
 
 ```text
 .
+|-- .github/
+|   `-- workflows/
+|       `-- linux-packages.yml
+|-- build/
+|   `-- icons/
+|       |-- icon.ico
+|       |-- icon.png
+|       `-- png/
 |-- public/
 |   |-- favicon.png
 |   `-- icon.png
+|-- scripts/
+|   `-- generate-icons.mjs
 |-- src/
 |   |-- components/
 |   |   `-- ui.tsx
@@ -207,6 +229,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - startup profiles that can boot or quiet groups of Mewl-owned services through the Electron bridge
 - a persisted automation history feed that explains what started, stopped, retried, failed, or was toggled and why
 - hardened managed service execution rules so the desktop bridge only launches validated commands with controlled environments
+- a Linux packaging pipeline driven by `electron-builder`, with package metadata, generated icons, and a manual GitHub workflow for artifact builds
 - the current product step is the first half of the `Observed` / `Managed` split, with `Managed` now owning saved service definitions and the live Processes page staying visually lighter
 - older inferred managed config entries now normalize into the explicit saved-service schema during load so the runtime can separate remembered service definitions from current host processes
 - Pink Pixel branding applied without turning the app into a generic purple SaaS grid
@@ -232,3 +255,4 @@ The current product direction is intentionally utility-first rather than dashboa
 - Managed services can now be authored directly in the app with command fields, notes, color accents, and icon selection, while live process cards stay focused on inspection instead of control.
 - Creating from an observed process now opens the Managed editor with a prefilled draft banner so the saved definition is reviewed before it becomes part of Mewl's catalog.
 - Killing an observed process is now a dedicated live-runtime action that targets only the current pid and keeps managed lifecycle semantics separate.
+- The current packaging work is Linux-first because the runtime bridge still relies on Linux host-inspection paths and commands for process, port, disk, network, and GPU data.

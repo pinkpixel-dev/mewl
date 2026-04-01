@@ -155,4 +155,11 @@ This is the main UX split the product now points toward:
 - [ ] Add linting and formatting automation
 - [ ] Add CI build validation
 - [ ] Add accessibility pass for keyboard and reduced-motion behavior
-- [ ] Package the app for desktop delivery
+- [x] Package the app for desktop delivery
+
+### Phase 5 Progress Notes
+
+- Linux packaging is now wired through `electron-builder`, and the project can emit AppImage, `.deb`, and `.rpm` artifacts into `release/`.
+- Packaging icons are now generated from `public/icon.png`, including a Linux icon set plus future-facing `.ico` groundwork.
+- A manual GitHub Actions workflow now exists for Linux package builds and artifact upload.
+- Desktop delivery is intentionally Linux-first for now because the runtime bridge still relies on Linux host-inspection commands and files.

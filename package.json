@@ -11,8 +11,11 @@
     "dev:electron": "wait-on tcp:29463 && MEWL_RENDERER_URL=http://127.0.0.1:29463 electron electron/main.cjs",
     "dev:desktop": "concurrently -k \"npm:dev:web\" \"npm:dev:electron\"",
     "build": "tsc --noEmit && vite build",
+    "icons:generate": "node scripts/generate-icons.mjs",
     "preview": "vite preview",
-    "desktop": "npm run build && electron electron/main.cjs"
+    "desktop": "npm run build && electron electron/main.cjs",
+    "package:linux": "npm run build && npm run icons:generate && electron-builder --linux AppImage deb rpm",
+    "package:linux:dir": "npm run build && npm run icons:generate && electron-builder --linux dir"
   },
   "keywords": [
     "mewl",
@@ -25,7 +28,58 @@
     "pink-pixel"
   ],
   "author": "Pink Pixel <admin@pinkpixel.dev>",
+  "homepage": "https://pinkpixel.dev",
   "license": "Apache-2.0",
+  "build": {
+    "appId": "dev.pinkpixel.mewl",
+    "productName": "Mewl",
+    "asar": true,
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Utility",
+      "icon": "build/icons/png",
+      "maintainer": "Pink Pixel <admin@pinkpixel.dev>",
+      "executableName": "mewl",
+      "synopsis": "Local process and port management desktop dashboard",
+      "description": "Mewl is a local operations dashboard for managing running services, watched ports, lifecycle actions, and host telemetry from one workspace.",
+      "desktop": {
+        "entry": {
+          "Name": "Mewl",
+          "Comment": "Dream it, Pixel it. Local process and port control from one desktop workspace.",
+          "Categories": "Utility;Development;",
+          "StartupNotify": "true",
+          "StartupWMClass": "Mewl"
+        }
+      }
+    },
+    "appImage": {
+      "artifactName": "${productName}-${version}-${arch}.AppImage"
+    },
+    "deb": {
+      "artifactName": "${name}_${version}_${arch}.${ext}",
+      "priority": "optional"
+    },
+    "rpm": {
+      "artifactName": "${name}-${version}.${arch}.${ext}"
+    }
+  },
   "dependencies": {
     "lucide-react": "^1.7.0",
     "react": "^19.2.4",
@@ -38,6 +92,9 @@
     "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^9.2.1",
     "electron": "^41.1.0",
+    "electron-builder": "^26.8.1",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
     "vite": "^8.0.3",

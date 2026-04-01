@@ -13,6 +13,7 @@ The latest iteration chooses Electron as the native host direction, introduces a
 - Bundler: Vite 8
 - Styling: Tailwind CSS 4 plus custom CSS tokens and effects
 - Icons: lucide-react
+- Packaging: electron-builder
 - Asset strategy: static assets served from `public/`
 - Production desktop renderer: built with relative asset paths so Electron can load the bundle from `dist/index.html`
 - Dev server address: `127.0.0.1:29463`
@@ -129,6 +130,7 @@ The current implementation:
 - now keeps a short in-memory metric history on the Electron side so the renderer can draw trend charts from live samples instead of static snapshots
 - keeps discovered host processes read-only so Mewl does not send lifecycle signals to processes it does not own
 - now exposes a separate observed kill path that can terminate a live pid only when it is not already claimed by a managed service
+- now supports Linux package groundwork through `electron-builder`, including generated icon resources and package metadata for AppImage, `.deb`, and `.rpm` outputs
 
 ### `electron/main.cjs`
 
@@ -194,6 +196,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - alert filtering uses local state plus runtime-provided metadata so the tray can narrow incidents without leaving the current workspace
 - monitor visuals combine quiet renderer polling with runtime-provided history series so the charts keep moving during an active desktop session
 - the top command bar now owns a higher stacking layer so the alerts tray stays above the dashboard cards
+- Linux packaging now runs from one command path, regenerating icons from `public/icon.png` before building AppImage, `.deb`, and `.rpm` artifacts into `release/`
 
 ## Current Limitations
 
@@ -204,7 +207,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - richer bulk-import tooling is still pending, but legacy `mewl.services.json` entries can now be reviewed and cleared from the Managed editor
 - no auth, multi-user roles, or workspace sync
 - no testing suite yet
-- no packaging for desktop delivery yet
+- the runtime bridge is still Linux-first, so packaged Linux builds are the supported delivery target while Windows host inspection remains out of scope for now
 - the local terminal environment used for automated verification still reports an Electron bootstrap issue before the app process fully initializes, so the fix here was validated by build output and runtime-path inspection rather than a successful interactive Electron launch in-tool
 
 ## Extension Points
@@ -216,3 +219,4 @@ This structure keeps the app close to the original mockup mood while making the 
 - add live port discovery and collision detection from the host machine
 - persist workspace profiles, startup groups, and automation presets beyond the single local session model
 - add richer charts, searchable logs, streaming tails, and deeper process detail panes
+- add broader cross-platform host adapters if Mewl ever needs to package beyond Linux

@@ -23,13 +23,22 @@ Version `1.0.0` is the first Linux-ready release of Mewl, shipping the Electron 
 
 ![Mewl managed services workspace](screenshots/Screenshot3.png)
 
+### Logs
+
+![Mewl logs workspace](screenshots/Screenshot4.png)
+
+
+![Mewl logs workspace](screenshots/Screenshot5.png)
+
 ### Ports
 
-![Mewl ports workspace](screenshots/Screenshot4.png)
+![Mewl ports workspace](screenshots/Screenshot6.png)
 
 ### Monitor
 
-![Mewl monitor workspace](screenshots/Screenshot5.png)
+![Mewl monitor trend canvas](screenshots/Screenshot7.png)
+
+![Mewl monitor resource draw](screenshots/Screenshot8.png)
 
 ## What It Does
 

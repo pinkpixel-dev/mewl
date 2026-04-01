@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-04-01 13:45 EDT
+
+- added three new README screenshots covering a detailed Ports view plus two additional Monitor captures
+- refreshed the overview notes so the expanded screenshot gallery is documented consistently
+
 ## 2026-04-01 13:37 EDT
 
 - changed the Logs workspace auto-follow behavior so scrolling away from the newest entries stops live pinning instead of snapping the view back during active log flow

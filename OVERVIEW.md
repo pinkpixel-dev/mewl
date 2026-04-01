@@ -208,7 +208,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - monitor visuals combine quiet renderer polling with runtime-provided history series so the charts keep moving during an active desktop session
 - the top command bar now owns a higher stacking layer so the alerts tray stays above the dashboard cards
 - Linux packaging now runs from one command path, regenerating icons from `public/icon.png` before building AppImage, `.deb`, and `.rpm` artifacts into `release/`
-- the release docs now include a README screenshot gallery covering the overview, processes, managed, ports, and monitor workspaces
+- the release docs now include an expanded README screenshot gallery covering overview, processes, managed, ports, and multiple monitor and ports detail views
 
 ## Current Limitations
 

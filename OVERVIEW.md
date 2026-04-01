@@ -28,6 +28,7 @@ The current implementation includes:
 
 - a collapsible left navigation rail for overview, processes, managed, ports, and monitor
 - a compact action/search header with no large banner copy
+- a base-aware branded shell icon path so the sidebar app icon and favicon still render in packaged `file://` builds
 - a rose-accented shared search field that matches the Pink Pixel brand color
 - a clean dashboard made of summary cards plus short process and port preview lists
 - a dedicated Processes page with expandable cards and a full inspector surface for live process inspection

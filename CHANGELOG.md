@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 23:00 EDT
+
+- fixed the packaged shell branding icon path by switching the sidebar app icon and favicon to base-aware `icon.png` URLs instead of root-absolute `/icon.png`
+- refreshed the README and overview to document the packaged UI icon fix for `file://` Linux builds
+
 ## 2026-03-31 22:53 EDT
 
 - added a Linux packaging pipeline with `electron-builder`, including `npm run package:linux` plus Linux targets for AppImage, `.deb`, and `.rpm`

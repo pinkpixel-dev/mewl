@@ -190,6 +190,7 @@ const delay = (ms: number) => new Promise<void>((resolve) => window.setTimeout(r
 const workspaceStorageKey = "mewl.workspace.v1";
 const processLogTailLimit = 10;
 const defaultCommandState = "Ready to manage local services, ports, and runtime pressure.";
+const appIconUrl = `${import.meta.env.BASE_URL}icon.png`;
 
 const managedServiceColorMap: Record<ManagedServiceColor, string> = {
   default: "#ffffff",
@@ -3373,7 +3374,7 @@ function App() {
           <div className={`flex items-center ${sidebarCollapsed ? "justify-center" : "justify-between"} gap-3`}>
             <div className="flex items-center gap-3">
               <img
-                src="/icon.png"
+                src={appIconUrl}
                 alt="Mewl icon"
                 className="size-18 rounded-[16px] border border-white/10 object-cover shadow-[0_0_32px_rgba(148,163,184,0.18)]"
               />

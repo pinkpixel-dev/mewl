@@ -220,6 +220,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - a runtime source abstraction that boots only when the Electron bridge is available
 - a live Electron host bridge that can scan the current user session for processes, ports, and machine pressure
 - an Electron-safe production renderer build that uses relative asset paths instead of web-only absolute `/assets/...` URLs
+- packaged shell branding now also resolves the sidebar app icon and favicon through base-aware paths so `file://` Linux builds do not lose the UI icon
 - a tuned Ports registry layout that keeps longer `Target` bindings readable in the desktop shell
 - config-driven managed services so desktop lifecycle actions only touch processes Mewl explicitly owns
 - managed service settings that round-trip between the React UI and `mewl.services.json`

@@ -132,6 +132,7 @@ The current implementation:
 - keeps discovered host processes read-only so Mewl does not send lifecycle signals to processes it does not own
 - now exposes a separate observed kill path that can terminate a live pid only when it is not already claimed by a managed service
 - now supports Linux package groundwork through `electron-builder`, including generated icon resources and package metadata for AppImage, `.deb`, and `.rpm` outputs
+- now forces Linux package builds into non-publishing artifact mode so CI packaging does not require GitHub release credentials
 
 ### `electron/main.cjs`
 

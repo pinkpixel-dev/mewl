@@ -84,6 +84,7 @@ This is the first real product pass, not the final native implementation yet.
 - Managed card toggle help now lives in hover text instead of taking up persistent space inside each card.
 - Linux desktop packaging is now wired through `electron-builder`, with generated icon assets and package commands for AppImage, `.deb`, and `.rpm`.
 - A manual GitHub Actions workflow now exists for Linux package builds and artifact upload, while Windows packaging remains intentionally out of scope until the runtime bridge itself becomes cross-platform.
+- Linux packaging now forces `electron-builder` into local-only output mode with `--publish never`, so CI artifact builds do not require a GitHub token.
 
 ## Run Locally
 

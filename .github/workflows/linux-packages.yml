@@ -27,6 +27,9 @@ jobs:
 
       - name: Build Linux packages
         run: npm run package:linux
+        env:
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
 
       - name: Upload Linux package artifacts
         uses: actions/upload-artifact@v4

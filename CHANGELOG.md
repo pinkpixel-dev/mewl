@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 23:06 EDT
+
+- disabled `electron-builder` publishing for Linux package commands and CI runs so GitHub Actions artifact builds no longer require `GH_TOKEN`
+- refreshed the README and overview to document the local-only Linux packaging behavior
+
 ## 2026-03-31 23:00 EDT
 
 - fixed the packaged shell branding icon path by switching the sidebar app icon and favicon to base-aware `icon.png` URLs instead of root-absolute `/icon.png`

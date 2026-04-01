@@ -14,8 +14,8 @@
     "icons:generate": "node scripts/generate-icons.mjs",
     "preview": "vite preview",
     "desktop": "npm run build && electron electron/main.cjs",
-    "package:linux": "npm run build && npm run icons:generate && electron-builder --linux AppImage deb rpm",
-    "package:linux:dir": "npm run build && npm run icons:generate && electron-builder --linux dir"
+    "package:linux": "npm run build && npm run icons:generate && electron-builder --publish never --linux AppImage deb rpm",
+    "package:linux:dir": "npm run build && npm run icons:generate && electron-builder --publish never --linux dir"
   },
   "keywords": [
     "mewl",
@@ -78,7 +78,8 @@
     },
     "rpm": {
       "artifactName": "${name}-${version}.${arch}.${ext}"
-    }
+    },
+    "publish": null
   },
   "dependencies": {
     "lucide-react": "^1.7.0",

@@ -68,6 +68,7 @@ This is the first real product pass, not the final native implementation yet.
 - The Monitor page now uses horizontal bands instead of a tall left-heavy split, and the Runtime Pulse waveform now fills the open Trend Canvas slot instead of moving into the sidebar.
 - The Managed page now keeps the workspace focused on a two-column service grid, with create and edit actions opening a modal instead of pinning a full editor column on the screen.
 - The old standalone Automation page has been folded away, and the service-level `autostart` and `watch ports` settings now live directly on the managed cards.
+- Managed card toggle help now lives in hover text instead of taking up persistent space inside each card.
 
 ## Run Locally
 

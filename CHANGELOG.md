@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 20:45 EDT
+
+- removed the always-visible helper text under the managed-card `autostart` and `watch ports` toggles and moved that guidance into hover text instead
+- refreshed the README, overview, and roadmap to document the tighter managed-card toggle treatment
+
 ## 2026-03-31 20:26 EDT
 
 - removed the standalone Automation page and folded the service-level `autostart` and `watch ports` controls into each managed service card

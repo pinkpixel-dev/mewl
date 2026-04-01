@@ -2196,7 +2196,7 @@ async function hydrateRuntimeSnapshot() {
           stdout: [
             createLogEntry(
               "info",
-              `Discovered ${processRow.args} from the Electron host runtime scan.`,
+              `Discovered ${processRow.args} from the runtime scan.`,
             ),
           ],
           stderr:
@@ -2252,7 +2252,7 @@ async function hydrateRuntimeSnapshot() {
       id: "cpu",
       label: "Host CPU",
       value: cpuPercent,
-      detail: "Live sample from Electron host CPU polling.",
+      detail: "Live sample from CPU polling.",
     },
     memory: {
       id: "memory",
@@ -2264,7 +2264,7 @@ async function hydrateRuntimeSnapshot() {
       id: "disk",
       label: "Disk Activity",
       value: diskPercent,
-      detail: "Root filesystem usage from the current host disk sample.",
+      detail: "Root filesystem usage.",
     },
     network: {
       id: "network",

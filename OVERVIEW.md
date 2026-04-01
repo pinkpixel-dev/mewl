@@ -41,6 +41,7 @@ The current implementation includes:
 - the first shipped split between lighter live-process inspection and a dedicated `Managed` service authoring flow for user-authored launch definitions
 - view-specific pages for port registry and monitoring workflows, with managed-service toggles handled directly on the Managed cards
 - managed-service cards that now carry their own `autostart` and `watch ports` toggles so service automation settings stay next to the lifecycle controls
+- managed-service toggle guidance that now lives in hover text so the card body stays compact
 - a ports registry table with a wider target column and wrapping behavior for longer bind addresses
 - a monitor view that now includes GPU telemetry when available and suppresses noisy process command text behind expandable detail panels
 - a monitor view that now pairs live pressure bars with rolling SVG trend charts fed by a session-local sample buffer

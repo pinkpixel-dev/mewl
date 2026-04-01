@@ -144,6 +144,7 @@ This is the main UX split the product now points toward:
 - The Monitor page now uses a wider banded layout, with the runtime waveform occupying the open sixth monitor tile so the primary workspace stays visually balanced on desktop.
 - The Managed workspace now uses a denser two-column card grid with modal editing, reducing the always-on form chrome and focusing the editor on the core command fields.
 - The old Automation page has now been collapsed back into Managed, with `autostart` and `watch ports` toggles living directly on each managed service card.
+- Managed-card automation toggles now keep their explanatory copy in hover text so the service grid stays tighter.
 
 ## Phase 5: Quality and Delivery
 

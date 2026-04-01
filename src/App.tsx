@@ -2175,10 +2175,6 @@ function App() {
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-white/42">Managed Services</p>
           <h3 className="mt-2 text-2xl font-semibold text-white">Command Deck</h3>
-          <p className="mt-3 max-w-2xl text-sm text-white/56">
-            Fill the workspace with the services Mewl should manage, then open a lightweight editor
-            only when you need to adjust the saved command definition.
-          </p>
         </div>
         <ShinyButton
           label="New Service"
@@ -2355,17 +2351,19 @@ function App() {
                     ].map((setting) => (
                       <div
                         key={setting.id}
+                        title={setting.detail}
                         className="rounded-[20px] border border-white/8 bg-black/18 px-4 py-4"
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <p className="text-sm font-semibold text-white/88">{setting.label}</p>
-                            <p className="mt-1 text-sm text-white/52">{setting.detail}</p>
                           </div>
                           <button
                             type="button"
                             onClick={() => toggleRule(setting.id, !setting.enabled)}
                             disabled={isPending || runtimeStatus !== "ready"}
+                            title={setting.detail}
+                            aria-label={`${setting.label}: ${setting.detail}`}
                             className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition duration-300 ${
                               isPending || runtimeStatus !== "ready"
                                 ? "cursor-not-allowed border-white/8 bg-black/18 text-white/34"
@@ -2860,9 +2858,6 @@ function App() {
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-white/42">System Monitor</p>
             <h3 className="mt-2 text-2xl font-semibold text-white">Pressure Tides</h3>
-          </div>
-          <div className="rounded-full border border-white/10 bg-black/18 px-3 py-1 text-xs uppercase tracking-[0.22em] text-white/58">
-            live sample
           </div>
         </div>
 

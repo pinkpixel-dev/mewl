@@ -1,5 +1,10 @@
 # Mewl
 
+<p align="center">
+	<img src="logo.png" alt="Mewl logo" width="300" height="300" />
+</p>
+
+
 Mewl is a local operations dashboard for managing running services, watched ports, quick lifecycle actions, and host pressure from one workspace.
 
 ## What It Does Today

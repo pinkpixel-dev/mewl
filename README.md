@@ -96,6 +96,8 @@ Version `1.0.0` is the first Linux-ready release of Mewl, shipping the Electron 
 - lucide-react
 - consola
 - Electron Builder
+- Astro 6
+- Starlight
 
 ## Current Reality
 
@@ -127,6 +129,7 @@ Version `1.0.0` is the first Linux-ready release of Mewl, shipping the Electron 
 - A manual GitHub Actions workflow now exists for Linux package builds and artifact upload, while Windows packaging remains intentionally out of scope until the runtime bridge itself becomes cross-platform.
 - Linux packaging now forces `electron-builder` into local-only output mode with `--publish never`, so CI artifact builds do not require a GitHub token.
 - The release README now includes real product screenshots for the overview, processes, managed, ports, and monitor workspaces.
+- The repository now also includes a standalone Starlight documentation site in [`docs/`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/docs), styled to stay close to the app's dark glass, dot-grid, and rose-accent visual system while using the same screenshot set for key workflows.
 
 ## Run Locally
 
@@ -201,6 +204,44 @@ Mewl only performs lifecycle control for services listed in the per-user config,
 Those same managed services now drive the Managed workspace editor and Electron automation rules, so the UI edits the real desktop config instead of local-only state.
 Profiles in that same file can now boot or quiet grouped services through the Automation page, and enabled startup profiles are applied when the Electron runtime hydrates.
 Managed service launches are now intentionally strict: Mewl tokenizes plain command strings into executable-plus-args form, inherits only explicitly listed environment variables, and blocks starts when reserved ports are already occupied.
+
+## Docs Site
+
+The repository now ships a standalone docs app in [`docs/`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/docs) built with Astro and Starlight.
+
+Run it locally:
+
+```bash
+npm run docs:dev
+```
+
+Build it:
+
+```bash
+npm run docs:build
+```
+
+Preview the production docs build:
+
+```bash
+npm run docs:preview
+```
+
+Deploy the docs to Cloudflare Pages:
+
+```bash
+npm run docs:deploy
+```
+
+The docs site reuses the Mewl logo and favicon from `docs/public/`, includes the app screenshots under `docs/public/screenshots/`, and starts with:
+
+- a branded splash homepage
+- a package-download installation guide that points to the shipped Linux artifacts and GitHub release pages
+- a clearer "What is Mewl?" product explainer and desktop workflow guide
+- a workspace tour covering Overview, Processes, Managed, Logs, Ports, and Monitor
+- managed-services and diagnostics guides
+
+The repo ignore rules now also explicitly exclude docs-side generated state such as `docs/dist`, `docs/.astro`, Wrangler local files, and docs-local env files so the new documentation workflow stays clean in Git.
 
 ## Project Structure
 

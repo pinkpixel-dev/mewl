@@ -6,6 +6,8 @@ Mewl is a local process and port management app for Pink Pixel. This pass pushes
 
 The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, wires real lifecycle control for Mewl-owned services, and now adds restart policies, a persisted automation history feed, a filterable alerts tray, a dedicated `Logs` workspace with an Electron-main broker plus adapter-style sources for internal diagnostics, managed runtime output, Docker-derived container logs, and Linux journald system logs, richer rolling monitor visuals, card-level managed-service toggles, and first-class managed service modes for `command`, `script`, and `docker` flows on top of the Managed workspace cleanup flow, observed-to-managed review path, and observed-only kill action.
 
+The repository now also includes a standalone Astro + Starlight docs site in `docs/`, styled to feel like the shipped app and seeded with the same screenshot set used in the release materials.
+
 Version `1.0.0` marks the first Linux-ready release point for that product slice.
 
 ## Technical Summary
@@ -16,6 +18,7 @@ Version `1.0.0` marks the first Linux-ready release point for that product slice
 - Styling: Tailwind CSS 4 plus custom CSS tokens and effects
 - Icons: lucide-react
 - Packaging: electron-builder
+- Documentation: Astro 6 + Starlight
 - Asset strategy: static assets served from `public/`
 - Production desktop renderer: built with relative asset paths so Electron can load the bundle from `dist/index.html`
 - Dev server address: `127.0.0.1:29463`
@@ -161,6 +164,19 @@ Defines the renderer build and development server behavior:
 - uses a relative `base` so production assets load correctly from Electron's `file://` path
 - binds both dev and preview to `127.0.0.1:29463` so Electron and Vite agree on the same loopback address during desktop development
 
+### `docs/`
+
+Provides a separate documentation application for the product.
+
+The docs project currently:
+
+- uses Astro 6 with Starlight for the docs shell, routing, search, and markdown rendering
+- keeps its own package manifest, lockfile, and `docs/public/` assets so it can be built independently from the Electron app
+- mirrors the app's visual direction with Plus Jakarta Sans, Space Grotesk, a dark dot-grid background, glass-like surfaces, and Pink Pixel rose accents
+- includes end-user installation, product overview, workspace-tour, managed-service, and diagnostics pages seeded with the current Mewl screenshots
+- includes Cloudflare Pages deployment wiring through `docs/wrangler.toml` plus Wrangler-backed preview and deploy scripts
+- relies on repo ignore rules that now exclude docs-generated Astro cache output and Wrangler local state from Git
+
 ### `src/styles.css`
 
 Holds the visual system outside component logic:
@@ -211,6 +227,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - the top command bar now owns a higher stacking layer so the alerts tray stays above the dashboard cards
 - Linux packaging now runs from one command path, regenerating icons from `public/icon.png` before building AppImage, `.deb`, and `.rpm` artifacts into `release/`
 - the release docs now include an expanded README screenshot gallery covering overview, processes, managed, ports, and multiple monitor and ports detail views
+- the standalone docs site now extends that documentation surface with a dedicated Starlight homepage and screenshot-backed guides that stay visually aligned with the desktop shell
 
 ## Current Limitations
 

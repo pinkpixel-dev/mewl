@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-04-01 16:59 EDT
+
+- tightened `.gitignore` so generated Astro cache files, docs build output, Wrangler local state, and local docs env files are not accidentally committed
+- refreshed the README, overview, roadmap, and release notes so the repo hygiene pass is documented consistently
+
+## 2026-04-01 16:57 EDT
+
+- removed the `Reference` section from the Starlight sidebar so the user-facing docs navigation stays focused on onboarding and guides
+- refreshed the README, overview, roadmap, and release notes so the slimmer docs navigation is documented consistently
+
+## 2026-04-01 16:45 EDT
+
+- added `docs/wrangler.toml` and Wrangler-based preview/deploy scripts so the Starlight docs site is configured for Cloudflare Pages deployment
+- added a Cloudflare deployment reference page inside the docs app and refreshed the root project docs to mention the new docs publishing workflow
+
+## 2026-04-01 16:46 EDT
+
+- rewrote the docs installation page around packaged Linux downloads and GitHub release links instead of source-build instructions
+- expanded the Starlight docs coverage with a product explainer and a full workspace tour so the docs explain what Mewl does and how to use each major surface more clearly
+- refreshed the README, overview, roadmap, and release notes so the stronger end-user docs coverage is documented consistently
+
+## 2026-04-01 16:22 EDT
+
+- built a standalone Astro + Starlight documentation site in `docs/` with Pink Pixel branding, a Mewl-aligned dark glass visual system, starter guides, and config reference pages
+- added root helper scripts for running and building the docs site, copied the app screenshot set into the docs app, and wired those captures into the new Starlight content
+- refreshed the README, overview, roadmap, and release notes so the new docs surface is documented consistently across the project
+
 ## 2026-04-01 16:02 EDT
 
 - fixed the Overview `Running Now` preview cards so very long process names and command strings wrap inside the card instead of bleeding past the panel edge

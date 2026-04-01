@@ -1,11 +1,22 @@
 # Build
 /dist
 /release
+/docs/dist
+/docs/.astro
 
 # Dependencies
 /node_modules
+/docs/node_modules
+
+# Cloudflare / local env
+/docs/.wrangler
+/docs/.dev.vars
+/docs/.env
+/docs/.env.*
 
 # Other
+.DS_Store
 RELEASE_NOTES.md
 ROADMAP.md
 Blueprint.md
+/docs/reference

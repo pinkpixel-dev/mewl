@@ -44,6 +44,7 @@ The current implementation includes:
 - a ports registry table with a wider target column and wrapping behavior for longer bind addresses
 - a monitor view that now includes GPU telemetry when available and suppresses noisy process command text behind expandable detail panels
 - a monitor view that now pairs live pressure bars with rolling SVG trend charts fed by a session-local sample buffer
+- a monitor composition that now runs left-to-right, with a three-column trend grid, a wider snapshot band, a two-column noisy-service lane, and the runtime waveform occupying the sixth trend tile
 - local state transitions that coordinate with the live Electron runtime bridge
 - workspace persistence for the active view, filters, expanded cards, selected process, alerts, and automation state
 - an alerts tray that can now filter the current incident feed by severity, service, and time window
@@ -179,6 +180,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - button glow behavior follows Sparklebots interaction patterns
 - progress indicators and animated signal bars add motion without crowding the layout
 - the monitor page now keeps noisy service command details collapsed until explicitly expanded
+- the monitor page now prioritizes width over height so the workspace no longer builds one oversized leading column
 - alert visibility uses local `useState` and conditional rendering for the top-right tray
 - alert filtering uses local state plus runtime-provided metadata so the tray can narrow incidents without leaving the current workspace
 - monitor visuals combine quiet renderer polling with runtime-provided history series so the charts keep moving during an active desktop session

@@ -2821,7 +2821,7 @@ function App() {
   );
 
   const renderMonitorPage = () => (
-    <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.88fr)]">
+    <section className="grid gap-4">
       <div className={panelClass}>
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -2833,105 +2833,123 @@ function App() {
           </div>
         </div>
 
-        <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(300px,0.9fr)]">
+        <div className="mt-6 space-y-4">
           {monitorTrendCards.length > 0 ? (
-            <div className="space-y-4">
-              <div className="rounded-[28px] border border-white/8 bg-black/18 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-white/38">
-                      Trend Canvas
-                    </p>
-                    <p className="mt-2 text-lg font-semibold text-white">
-                      Rolling host pressure
-                    </p>
-                  </div>
-                  <Gauge size={20} className="text-cyan-300" />
+            <div className="rounded-[28px] border border-white/8 bg-black/18 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-white/38">
+                    Trend Canvas
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-white">
+                    Rolling host pressure
+                  </p>
                 </div>
-
-                <div className="mt-5 grid gap-3">
-                  {monitorTrendCards.map((series) => (
-                    <PulseLineChart
-                      key={series.id}
-                      label={series.label}
-                      valueLabel={series.displayValue ?? `${series.values[series.values.length - 1] ?? 0}%`}
-                      detail={series.detail}
-                      values={series.values}
-                      hex={monitorMetricHexMap[series.id] ?? accent.cyan}
-                      inactive={series.available === false}
-                    />
-                  ))}
-                </div>
+                <Gauge size={20} className="text-cyan-300" />
               </div>
 
-              {gpuTrendSeries ? (
-                <PulseLineChart
-                  label={gpuTrendSeries.label}
-                  valueLabel={
-                    gpuTrendSeries.displayValue ??
-                    `${gpuTrendSeries.values[gpuTrendSeries.values.length - 1] ?? 0}%`
-                  }
-                  detail={gpuTrendSeries.detail}
-                  values={gpuTrendSeries.values}
-                  hex={monitorMetricHexMap[gpuTrendSeries.id] ?? accent.rose}
-                  inactive={gpuTrendSeries.available === false}
-                />
-              ) : null}
+              <div className="mt-5 grid gap-3 xl:grid-cols-3">
+                {monitorTrendCards.map((series) => (
+                  <PulseLineChart
+                    key={series.id}
+                    label={series.label}
+                    valueLabel={series.displayValue ?? `${series.values[series.values.length - 1] ?? 0}%`}
+                    detail={series.detail}
+                    values={series.values}
+                    hex={monitorMetricHexMap[series.id] ?? accent.cyan}
+                    inactive={series.available === false}
+                  />
+                ))}
+                {gpuTrendSeries ? (
+                  <PulseLineChart
+                    label={gpuTrendSeries.label}
+                    valueLabel={
+                      gpuTrendSeries.displayValue ??
+                      `${gpuTrendSeries.values[gpuTrendSeries.values.length - 1] ?? 0}%`
+                    }
+                    detail={gpuTrendSeries.detail}
+                    values={gpuTrendSeries.values}
+                    hex={monitorMetricHexMap[gpuTrendSeries.id] ?? accent.rose}
+                    inactive={gpuTrendSeries.available === false}
+                  />
+                ) : null}
+                <article className="relative overflow-hidden rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+                  <div
+                    className="pointer-events-none absolute inset-x-6 top-0 h-px"
+                    style={{ background: `linear-gradient(90deg, transparent, ${accent.amber}, transparent)` }}
+                  />
+                  <div className="relative flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
+                        Runtime Pulse
+                      </p>
+                      <p className="mt-2 text-xl font-semibold text-white">Current service waveform</p>
+                    </div>
+                    <div
+                      className="rounded-full border px-3 py-1 text-[0.68rem] uppercase tracking-[0.22em]"
+                      style={{
+                        color: accent.amber,
+                        borderColor: `${accent.amber}30`,
+                        backgroundColor: `${accent.amber}12`,
+                      }}
+                    >
+                      live
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-[20px] border border-white/8 bg-black/24 px-4 py-5">
+                    <SignalBars
+                      values={[24, 46, 62, 71, 53, 88, 76, 68, 90, 58]}
+                      className="h-40 w-full justify-between gap-2"
+                      barClassName="min-w-0 flex-1"
+                    />
+                  </div>
+
+                  <p className="mt-4 text-sm text-white/52">
+                    Live waveform for the active service draw rhythm across the current sample window.
+                  </p>
+                </article>
+              </div>
             </div>
           ) : (
-            <div className="rounded-[22px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48 xl:col-span-2">
+            <div className="rounded-[22px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48">
               Host metrics will appear here once the runtime source delivers a pressure snapshot.
             </div>
           )}
 
-          <div className="space-y-4">
-            <div className="rounded-[28px] border border-white/8 bg-[#0f141b]/94 p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-white/38">
-                    Snapshot Lane
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-white">
-                    Current host pressure
-                  </p>
-                </div>
-                <div className="rounded-full border border-white/10 bg-black/18 px-3 py-1 text-xs uppercase tracking-[0.22em] text-white/58">
-                  last 24 samples
-                </div>
+          <div className="rounded-[28px] border border-white/8 bg-[#0f141b]/94 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-white/38">
+                  Snapshot Lane
+                </p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  Current host pressure
+                </p>
               </div>
-
-              <div className="mt-5 grid gap-3">
-                {monitorMetrics.length > 0 ? (
-                  monitorMetrics.map((metric) => (
-                    <HologramProgress
-                      key={metric.id}
-                      label={metric.label}
-                      value={metric.value}
-                      valueLabel={metric.displayValue}
-                      detail={metric.detail}
-                      inactive={metric.available === false}
-                      hex={monitorMetricHexMap[metric.id] ?? accent.cyan}
-                    />
-                  ))
-                ) : (
-                  <div className="rounded-[22px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48">
-                    Waiting on the next host pressure snapshot.
-                  </div>
-                )}
+              <div className="rounded-full border border-white/10 bg-black/18 px-3 py-1 text-xs uppercase tracking-[0.22em] text-white/58">
+                last 24 samples
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-white/8 bg-black/18 p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-white/38">Runtime Pulse</p>
-                  <p className="mt-2 text-lg font-semibold text-white">Current service waveform</p>
+            <div className="mt-5 grid gap-3 xl:grid-cols-2">
+              {monitorMetrics.length > 0 ? (
+                monitorMetrics.map((metric) => (
+                  <HologramProgress
+                    key={metric.id}
+                    label={metric.label}
+                    value={metric.value}
+                    valueLabel={metric.displayValue}
+                    detail={metric.detail}
+                    inactive={metric.available === false}
+                    hex={monitorMetricHexMap[metric.id] ?? accent.cyan}
+                  />
+                ))
+              ) : (
+                <div className="rounded-[22px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48 xl:col-span-2">
+                  Waiting on the next host pressure snapshot.
                 </div>
-                <Gauge size={20} className="text-amber-300" />
-              </div>
-              <div className="mt-4">
-                <SignalBars values={[24, 46, 62, 71, 53, 88, 76, 68, 90, 58]} className="h-24" />
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -2943,7 +2961,7 @@ function App() {
           <h3 className="mt-2 text-xl font-semibold text-white">Top Resource Draw</h3>
         </div>
 
-        <div className="mt-5 space-y-3">
+        <div className="mt-5 grid gap-3 xl:grid-cols-2">
           {busiestProcesses.length > 0 ? (
             busiestProcesses.map((process) => (
               <article
@@ -3028,7 +3046,7 @@ function App() {
               </article>
             ))
           ) : (
-            <div className="rounded-[22px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48">
+            <div className="rounded-[22px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48 xl:col-span-2">
               Resource leaders will appear after the runtime delivers process telemetry.
             </div>
           )}
@@ -3380,6 +3398,7 @@ function App() {
               ))}
             </div>
           </div>
+
         </aside>
 
         <main className="flex min-w-0 flex-col gap-4">

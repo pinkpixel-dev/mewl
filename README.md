@@ -29,6 +29,7 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Filter the alerts tray by severity, service, and time window when you need to narrow the current incident feed
 - Catch richer runtime issues including crash loops, reserved ports claimed by the wrong process, and unhealthy managed-service CPU or memory spikes
 - Read rolling trend visuals for CPU, memory, disk, network, and GPU from the Monitor page instead of only seeing single-snapshot pressure bars
+- Use a cleaner Monitor composition with a full-width trend canvas, a wider snapshot lane, a two-by-two noisy-services grid, and an in-grid runtime waveform tile instead of one tall stacked monitor column
 - Launch managed services through a hardened Electron runner with explicit env inheritance, command tokenization, PATH resolution, and reserved-port guards
 - Reattach orphaned managed services that are already running on the host so lifecycle actions can reclaim and control them cleanly
 - Normalize accidental helper-process promotions back to a single managed entry so repeated `Manage` clicks on child processes do not create confusing duplicates in the saved config
@@ -64,6 +65,7 @@ This is the first real product pass, not the final native implementation yet.
 - The live Processes page now exposes only two observed-process actions: create a managed draft from what Mewl can currently see, or kill the live pid without changing the managed catalog.
 - The alerts tray is now filterable and uses richer runtime metadata so it can point to a specific service, time window, and alert category instead of staying as a flat feed.
 - The Monitor page now keeps a rolling in-memory sample buffer through the Electron bridge and quietly refreshes it in the renderer so trend charts feel live instead of decorative.
+- The Monitor page now uses horizontal bands instead of a tall left-heavy split, and the Runtime Pulse waveform now fills the open Trend Canvas slot instead of moving into the sidebar.
 
 ## Run Locally
 
@@ -170,6 +172,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - observed process cards now prefer launchable parent app rows instead of noisy helper children, which keeps the live process list focused on the app users actually mean
 - collapsed process cards now stay compact, with long command and path details moved into the expanded state
 - dedicated Ports and Monitor pages for deeper operational detail
+- a rebalanced Monitor page layout that spreads trend charts across the workspace, including a sixth Runtime Pulse tile before dropping into snapshot and noisy-service bands
 - GPU telemetry folded into the host monitor and sidebar health card, with graceful fallback when the host bridge cannot read GPU data
 - a cleaner Automation page that keeps rule editing in one workspace instead of a separate scaffold-like state column
 - expandable monitor-side resource cards so long process command lines stay hidden until requested

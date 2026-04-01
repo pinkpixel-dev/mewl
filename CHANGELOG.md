@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 20:10 EDT
+
+- moved the Runtime Pulse card out of the sidebar and into the open sixth Trend Canvas slot so the monitor grid fills the desktop space more cleanly
+- removed the monitor-only sidebar waveform so Host Health stays focused on machine state while Runtime Pulse remains part of the main monitoring canvas
+- refreshed the README, overview, and roadmap to document the in-grid Runtime Pulse placement
+
+## 2026-03-31 20:07 EDT
+
+- rearranged the Monitor page into horizontal bands so the trend canvas spans the workspace, the snapshot lane reads across the page, and the noisy-service cards sit in a two-column grid instead of a tall first column
+- moved the Runtime Pulse waveform into the sidebar under Host Health while the Monitor view is active, giving the main monitoring surface more room for trend and service cards
+- refreshed the README, overview, and roadmap to document the new monitor layout pass
+
 ## 2026-03-31 14:58 EDT
 
 - added rolling monitor visuals for CPU, memory, disk, network, and GPU by introducing a live metric-history buffer in the Electron runtime and a new SVG trend-chart component in the shared UI layer

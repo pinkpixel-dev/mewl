@@ -178,7 +178,7 @@ All notable changes to this project will be documented in this file.
 - removed the remaining browser-side mock runtime fallback so `src/runtime/provider.ts` now requires the live Electron bridge
 - updated the renderer reset and error flow to retry the Electron connection instead of rebuilding from a fake snapshot
 - deleted the unused mock dataset and boot helpers from `src/data/runtime.ts`, leaving only the shared runtime contract types
-- refreshed the docs and roadmap so Mewl is described as an Electron-first desktop cockpit with no runtime fallback path
+- refreshed the docs and roadmap so Mewl is described as an Electron-first desktop dashboard with no runtime fallback path
 - revalidated the app with a successful `npm run build`
 
 ## 2026-03-31 08:14 EDT
@@ -230,7 +230,7 @@ All notable changes to this project will be documented in this file.
 - chose Electron as Mewl's native host integration layer and documented the decision across the roadmap and technical docs
 - added `src/runtime/provider.ts` so the renderer now hydrates through a runtime-source boundary instead of calling the mock boot helpers directly
 - typed a future `window.mewlHost` preload bridge in `src/vite-env.d.ts` so the app can adopt an Electron preload API without reshaping the UI contract
-- updated `index.html` metadata to describe Mewl as a local ops cockpit instead of the older server-manager scaffold wording
+- updated `index.html` metadata to describe Mewl as a local ops dashboard instead of the older server-manager scaffold wording
 - revalidated the application with a successful `npm run build`
 
 ## 2026-03-31 06:33 EDT

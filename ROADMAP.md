@@ -12,7 +12,7 @@
 - [x] Shift the visual system to neutral slate surfaces with accent-only color
 - [x] Replace the bottom activity panel with a top-right notifications tray
 
-## Phase 2: Local Ops Cockpit
+## Phase 2: Local Ops Dashboard
 
 - [x] Reframe the scaffold around local processes, ports, and host monitoring
 - [x] Replace the fantasy server copy with a process-oriented runtime model

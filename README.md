@@ -1,6 +1,6 @@
 # Mewl
 
-Mewl is a local operations cockpit for managing running services, watched ports, quick lifecycle actions, and host pressure from one workspace.
+Mewl is a local operations dashboard for managing running services, watched ports, quick lifecycle actions, and host pressure from one workspace.
 
 ## What It Does Today
 
@@ -180,7 +180,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - service-level automation controls kept on the managed cards instead of a separate mostly-empty automation workspace
 - expandable monitor-side resource cards so long process command lines stay hidden until requested
 - a lean managed-service editor that focuses on name, description, start/stop/restart commands, color, and icon selection while deeper runtime fields stay out of the default UI
-- structured process logs and session memory so the shell feels more like a real local cockpit
+- structured process logs and session memory so the shell feels more like a real local dashboard
 - a runtime source abstraction that boots only when the Electron bridge is available
 - a live Electron host bridge that can scan the current user session for processes, ports, and machine pressure
 - an Electron-safe production renderer build that uses relative asset paths instead of web-only absolute `/assets/...` URLs
@@ -208,7 +208,7 @@ The current product direction is intentionally utility-first rather than dashboa
 
 - `mockup.png` remains the visual reference image in the repository.
 - `public/icon.png` is used by the app shell and browser tab.
-- The current implementation is a live Electron-first desktop cockpit with persisted workspace preferences and managed local service control.
+- The current implementation is a live Electron-first desktop dashboard with persisted workspace preferences and managed local service control.
 - The browser build now intentionally stops at the desktop-required state instead of presenting a fallback runtime.
 - The desktop shell can now control services registered in `mewl.services.json`; arbitrary discovered host processes are intentionally read-only from the live Processes page.
 - The live host scan now hides helper subprocesses such as Chromium zygotes and utility workers from the default Processes grid so one app reads like one app.

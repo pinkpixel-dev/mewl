@@ -588,7 +588,7 @@ function App() {
           setAutomationHistory(snapshot.automationHistory);
         })
         .catch(() => {
-          // Keep the current cockpit state when a background refresh misses once.
+          // Keep the current dashboard state when a background refresh misses once.
         });
     }, 6000);
 
@@ -3089,7 +3089,7 @@ function App() {
         eyebrow: "Runtime Source",
         title: "Hydrating the local workspace",
         detail:
-          `Mewl is restoring saved filters, process state, and the current ${runtimeSource.label.toLowerCase()} snapshot before the cockpit becomes interactive.`,
+          `Mewl is restoring saved filters, process state, and the current ${runtimeSource.label.toLowerCase()} snapshot before the dashboard becomes interactive.`,
         hex: accent.cyan,
         icon: Terminal,
       });

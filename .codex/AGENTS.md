@@ -76,7 +76,7 @@
 
 ## Project Overview
 
-**Mewl** is an interactive, local operations cockpit for managing running services, monitored ports, and system metrics from a single workspace. Features include:
+**Mewl** is an interactive, local operations dashboard for managing running services, monitored ports, and system metrics from a single workspace. Features include:
 
 - Search and start/stop/restart/scan services
 - Managed restart policies and automation history for service recovery and auditability

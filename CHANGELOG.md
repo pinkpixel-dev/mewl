@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-04-01 15:34 EDT
+
+- fixed an intermittent Monitor page render glitch where a stale card subtree could appear inside the Trend Canvas after workspace/view transitions or live tile reshuffles
+- stabilized the monitor tile identities and forced the active workspace surface to remount on view/runtime changes so stale port-oriented content no longer bleeds into the monitor grid
+- refreshed the README, overview, roadmap, release notes, and blueprint notes so the monitor-card reconciliation fix is documented consistently
+
 ## 2026-04-01 13:45 EDT
 
 - added three new README screenshots covering a detailed Ports view plus two additional Monitor captures

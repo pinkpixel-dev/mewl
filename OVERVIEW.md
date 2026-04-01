@@ -52,6 +52,7 @@ The current implementation includes:
 - a monitor view that now includes GPU telemetry when available and suppresses noisy process command text behind expandable detail panels
 - a monitor view that now pairs live pressure bars with rolling SVG trend charts fed by a session-local sample buffer
 - a monitor composition that now runs left-to-right, with a three-column trend grid, a wider snapshot band, a two-column noisy-service lane, and the runtime waveform occupying the sixth trend tile
+- a keyed workspace remount boundary plus stable monitor-tile identities so intermittent stale-card reuse no longer leaks old port content into the monitor trend grid
 - local state transitions that coordinate with the live Electron runtime bridge
 - a dedicated Logs workspace that hydrates a starting unified log snapshot, then appends live log batches without disturbing the narrow per-process inspector tails
 - an Electron-main log broker that now owns retention, batching, and adapter startup for the unified diagnostics feed

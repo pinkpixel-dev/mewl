@@ -118,6 +118,7 @@ Version `1.0.0` is the first Linux-ready release of Mewl, shipping the Electron 
 - The alerts tray is now filterable and uses richer runtime metadata so it can point to a specific service, time window, and alert category instead of staying as a flat feed.
 - The Monitor page now keeps a rolling in-memory sample buffer through the Electron bridge and quietly refreshes it in the renderer so trend charts feel live instead of decorative.
 - The Monitor page now uses horizontal bands instead of a tall left-heavy split, and the Runtime Pulse waveform now fills the open Trend Canvas slot instead of moving into the sidebar.
+- The active workspace surface now remounts cleanly when the view or runtime state changes, which fixes the intermittent monitor-only card ghosting where stale port content could sometimes appear in the Trend Canvas.
 - The Managed page now keeps the workspace focused on a two-column service grid, with create and edit actions opening a modal instead of pinning a full editor column on the screen.
 - The old standalone Automation page has been folded away, and the service-level `autostart` and `watch ports` settings now live directly on the managed cards.
 - Managed card toggle help now lives in hover text instead of taking up persistent space inside each card.

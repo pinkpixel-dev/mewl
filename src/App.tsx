@@ -2730,15 +2730,6 @@ function App() {
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-white/42">Logs</p>
             <h3 className="mt-2 text-2xl font-semibold text-white">Unified Diagnostics</h3>
-            <p className="mt-3 max-w-3xl text-sm text-white/56">
-              Managed stdout and stderr, automation history, alert snapshots, and tagged Mewl
-              internal diagnostics stream into one feed without replacing the inspector tails.
-            </p>
-            <p className="mt-2 max-w-3xl text-sm text-white/44">
-              Docker logs now appear in this workspace for managed Docker services when Mewl can
-              derive a `docker logs` or `docker compose logs` target from the saved launch command,
-              and Linux system logs can stream in through the journald-backed system source.
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -3516,6 +3507,7 @@ function App() {
                 ))}
                 {gpuTrendSeries ? (
                   <PulseLineChart
+                    key={gpuTrendSeries.id}
                     label={gpuTrendSeries.label}
                     valueLabel={
                       gpuTrendSeries.displayValue ??
@@ -3527,7 +3519,10 @@ function App() {
                     inactive={gpuTrendSeries.available === false}
                   />
                 ) : null}
-                <article className="relative overflow-hidden rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
+                <article
+                  key="runtime-pulse"
+                  className="relative overflow-hidden rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4"
+                >
                   <div
                     className="pointer-events-none absolute inset-x-6 top-0 h-px"
                     style={{ background: `linear-gradient(90deg, transparent, ${accent.amber}, transparent)` }}
@@ -3984,7 +3979,9 @@ function App() {
             ) : null}
           </section>
 
-          {renderPage()}
+          <div key={`${runtimeStatus}-${activeView}`}>
+            {renderPage()}
+          </div>
         </main>
       </div>
       {renderManagedEditorModal()}

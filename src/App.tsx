@@ -47,7 +47,6 @@ import {
   type AlertRecord,
   type AlertSeverity,
   type AutomationHistoryEntry,
-  type AutomationHistoryOutcome,
   type AutomationRule,
   type ManagedServiceColor,
   type ManagedServiceDraft,
@@ -125,7 +124,6 @@ const viewMeta: Array<{
   { id: "managed", label: "Managed", icon: Sparkles, hex: accent.rose },
   { id: "ports", label: "Ports", icon: Waypoints, hex: accent.purple },
   { id: "monitor", label: "Monitor", icon: Activity, hex: accent.amber },
-  { id: "automation", label: "Automation", icon: Bot, hex: accent.green },
 ];
 
 const statusFilterOptions: Array<{ id: StatusFilter; label: string }> = [
@@ -235,12 +233,6 @@ const logLevelTextClassMap: Record<ProcessLogLevel, string> = {
   debug: "text-cyan-200",
   warning: "text-amber-200",
   error: "text-rose-200",
-};
-
-const automationOutcomeToneMap: Record<AutomationHistoryOutcome, "online" | "warning" | "offline"> = {
-  success: "online",
-  warning: "warning",
-  error: "offline",
 };
 
 const formatLogStamp = () =>
@@ -706,8 +698,6 @@ function App() {
   const activeRestartPolicyCount = processes.filter(
     (process) => process.managed && process.restartPolicy !== "manual",
   ).length;
-  const automationFailureCount = automationHistory.filter((entry) => entry.outcome === "error").length;
-  const latestAutomationEntries = automationHistory.slice(0, 10);
   const alertServiceOptions = Array.from(
     new Set(alerts.map((item) => item.serviceName).filter((value): value is string => Boolean(value))),
   );
@@ -2345,6 +2335,65 @@ function App() {
                     ))}
                   </div>
 
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {[
+                      {
+                        id: `service-autostart:${process.id}`,
+                        label: "Autostart",
+                        detail: "Launch this service automatically when the desktop runtime boots.",
+                        enabled: process.autoStart,
+                        hex: accent.rose,
+                      },
+                      {
+                        id: `service-watch:${process.id}`,
+                        label: "Watch Ports",
+                        detail:
+                          "Include this service in watched binding scans so Mewl can flag port collisions or drift.",
+                        enabled: process.watchPorts,
+                        hex: accent.cyan,
+                      },
+                    ].map((setting) => (
+                      <div
+                        key={setting.id}
+                        className="rounded-[20px] border border-white/8 bg-black/18 px-4 py-4"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-semibold text-white/88">{setting.label}</p>
+                            <p className="mt-1 text-sm text-white/52">{setting.detail}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleRule(setting.id, !setting.enabled)}
+                            disabled={isPending || runtimeStatus !== "ready"}
+                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition duration-300 ${
+                              isPending || runtimeStatus !== "ready"
+                                ? "cursor-not-allowed border-white/8 bg-black/18 text-white/34"
+                                : "border-white/10 bg-[#0f141b]/94 text-white/70 hover:border-white/18 hover:text-white"
+                            }`}
+                            style={
+                              setting.enabled
+                                ? ({
+                                    boxShadow: `0 0 24px ${setting.hex}22`,
+                                  } satisfies CSSProperties)
+                                : undefined
+                            }
+                          >
+                            <span
+                              className="size-2.5 rounded-full"
+                              style={{
+                                backgroundColor: setting.enabled
+                                  ? setting.hex
+                                  : "rgba(255,255,255,0.26)",
+                              }}
+                            />
+                            {setting.enabled ? "On" : "Off"}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/8 pt-4">
                     {renderManagedLifecycleIcons(process)}
                     <div className="flex items-center gap-2">
@@ -3039,157 +3088,6 @@ function App() {
     </section>
   );
 
-  const renderAutomationPage = () => (
-    <section className={panelClass}>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-white/42">Automation Rules</p>
-          <h3 className="mt-2 text-2xl font-semibold text-white">Session Guardrails</h3>
-        </div>
-        <div className="grid size-11 place-items-center rounded-[20px] border border-white/10 bg-black/18">
-          <Workflow size={20} className="text-green-300" />
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(260px,0.8fr)_minmax(260px,0.8fr)]">
-        <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
-          <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-            Latest Activity
-          </p>
-          <p className="mt-2 text-sm text-white/62">{commandState}</p>
-        </div>
-        <div className="rounded-[24px] border border-white/8 bg-black/18 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-white/84">Runtime Source</p>
-            <StatusPill
-              tone={runtimeSource.availability === "active" ? "online" : "starting"}
-              label={runtimeSource.badgeLabel || runtimeSource.label}
-            />
-          </div>
-          <p className="mt-2 text-sm text-white/54">{runtimeSource.detail}</p>
-        </div>
-        <div className="rounded-[24px] border border-white/8 bg-black/18 p-4">
-          <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-            Automation Snapshot
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-            {[
-              ["Restart Policies", `${activeRestartPolicyCount}`],
-              ["History Events", `${automationHistory.length}`],
-              ["Failures", `${automationFailureCount}`],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-[18px] border border-white/8 bg-[#0f141b]/94 px-3 py-3">
-                <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">{label}</p>
-                <p className="mt-2 text-lg font-semibold text-white">{value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.92fr)]">
-        <div className="space-y-3">
-          {automationRules.length > 0 ? (
-            automationRules.map((rule) => (
-              <div
-                key={rule.id}
-                className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 px-4 py-4"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold text-white/90">{rule.title}</p>
-                    <p className="mt-1 text-sm text-white/54">{rule.detail}</p>
-                    <p className="mt-3 text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-                      {rule.cadence}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => toggleRule(rule.id, !rule.enabled)}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/70 transition duration-300 hover:border-white/18 hover:text-white"
-                    style={
-                      rule.enabled
-                        ? ({
-                            boxShadow: `0 0 24px ${accent.green}22`,
-                          } satisfies CSSProperties)
-                        : undefined
-                    }
-                  >
-                    <span
-                      className="size-2.5 rounded-full"
-                      style={{
-                        backgroundColor: rule.enabled ? accent.green : "rgba(255,255,255,0.26)",
-                      }}
-                    />
-                    {rule.enabled ? "On" : "Off"}
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="rounded-[24px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48">
-              No automation rules have been provisioned for this workspace yet.
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-[24px] border border-white/8 bg-[#0f141b]/94 p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[0.72rem] uppercase tracking-[0.22em] text-white/34">
-                Automation History
-              </p>
-              <p className="mt-2 text-sm text-white/56">
-                Starts, stops, profile runs, retries, and failures are recorded here so the runtime
-                feels explainable instead of mysterious.
-              </p>
-            </div>
-            <div className="rounded-full border border-white/10 bg-black/18 px-3 py-1 text-xs uppercase tracking-[0.22em] text-white/58">
-              {automationHistory.length} events
-            </div>
-          </div>
-
-          <div className="mt-5 space-y-3">
-            {latestAutomationEntries.length > 0 ? (
-              latestAutomationEntries.map((entry) => (
-                <article
-                  key={entry.id}
-                  className="rounded-[20px] border border-white/8 bg-black/18 px-4 py-4"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white/88">{entry.title}</p>
-                      <p className="mt-1 text-sm text-white/56">{entry.detail}</p>
-                    </div>
-                    <StatusPill
-                      tone={automationOutcomeToneMap[entry.outcome]}
-                      label={entry.outcome}
-                    />
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[0.68rem] uppercase tracking-[0.2em] text-white/36">
-                    <span>{new Date(entry.stamp).toLocaleString()}</span>
-                    <span>•</span>
-                    <span>{entry.source}</span>
-                    {entry.serviceName ? (
-                      <>
-                        <span>•</span>
-                        <span>{entry.serviceName}</span>
-                      </>
-                    ) : null}
-                  </div>
-                </article>
-              ))
-            ) : (
-              <div className="rounded-[22px] border border-dashed border-white/10 bg-black/18 px-4 py-5 text-sm text-white/48">
-                No automation events have been recorded yet.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-
   const renderPage = () => {
     if (runtimeStatus === "loading") {
       return renderStatePanel({
@@ -3230,10 +3128,6 @@ function App() {
 
     if (activeView === "monitor") {
       return renderMonitorPage();
-    }
-
-    if (activeView === "automation") {
-      return renderAutomationPage();
     }
 
     return renderOverview();

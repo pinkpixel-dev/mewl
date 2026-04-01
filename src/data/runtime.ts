@@ -3,8 +3,7 @@ export type WorkspaceView =
   | "processes"
   | "managed"
   | "ports"
-  | "monitor"
-  | "automation";
+  | "monitor";
 
 export type ProcessStatus = "running" | "starting" | "degraded" | "stopped";
 

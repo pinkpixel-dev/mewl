@@ -4,7 +4,7 @@
 
 Mewl is a local process and port management app for Pink Pixel. This pass pushes the project from a visual scaffold into a more functional product shell by restoring workspace state, surfacing structured process logs, and handling runtime loading and failure states more deliberately.
 
-The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, wires real lifecycle control for Mewl-owned services, and now adds restart policies, a persisted automation history feed, a filterable alerts tray, and richer rolling monitor visuals on top of the Managed workspace cleanup flow, observed-to-managed review path, and observed-only kill action.
+The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, wires real lifecycle control for Mewl-owned services, and now adds restart policies, a persisted automation history feed, a filterable alerts tray, richer rolling monitor visuals, and card-level managed-service toggles on top of the Managed workspace cleanup flow, observed-to-managed review path, and observed-only kill action.
 
 ## Technical Summary
 
@@ -25,7 +25,7 @@ Defines the main product shell, workspace views, action handlers, search/filter 
 
 The current implementation includes:
 
-- a collapsible left navigation rail for overview, processes, managed, ports, monitor, and automation
+- a collapsible left navigation rail for overview, processes, managed, ports, and monitor
 - a compact action/search header with no large banner copy
 - a rose-accented shared search field that matches the Pink Pixel brand color
 - a clean dashboard made of summary cards plus short process and port preview lists
@@ -39,14 +39,14 @@ The current implementation includes:
 - explicit `managed` and `observed` ownership tags on process surfaces without extra warning copy cluttering the cards
 - a collapsed process-card layout that keeps the grid tidy by moving long command text into the expanded panel
 - the first shipped split between lighter live-process inspection and a dedicated `Managed` service authoring flow for user-authored launch definitions
-- view-specific pages for port registry, monitor, and automation workflows
-- a cleaner Automation page that surfaces latest activity and runtime source inline instead of keeping a bulky secondary state column
+- view-specific pages for port registry and monitoring workflows, with managed-service toggles handled directly on the Managed cards
+- managed-service cards that now carry their own `autostart` and `watch ports` toggles so service automation settings stay next to the lifecycle controls
 - a ports registry table with a wider target column and wrapping behavior for longer bind addresses
 - a monitor view that now includes GPU telemetry when available and suppresses noisy process command text behind expandable detail panels
 - a monitor view that now pairs live pressure bars with rolling SVG trend charts fed by a session-local sample buffer
 - a monitor composition that now runs left-to-right, with a three-column trend grid, a wider snapshot band, a two-column noisy-service lane, and the runtime waveform occupying the sixth trend tile
 - local state transitions that coordinate with the live Electron runtime bridge
-- workspace persistence for the active view, filters, expanded cards, selected process, alerts, and automation state
+- workspace persistence for the active view, filters, expanded cards, selected process, alerts, and managed-service toggle state
 - an alerts tray that can now filter the current incident feed by severity, service, and time window
 - loading, empty, and error states for runtime hydration and filtered views
 
@@ -153,14 +153,14 @@ Holds the visual system outside component logic:
 
 ## Layout Model
 
-The current app is organized into six major workspace zones:
+The current app is organized into five major workspace zones:
 
 1. Left navigation rail
 2. Sidebar host health plus compact machine snapshot
 3. Workspace header with search, scan, and alert tray
 4. Overview summary cards
 5. Dashboard preview panels for processes and port bindings
-6. Dedicated full pages for processes, managed services, ports, monitoring, and automation
+6. Dedicated full pages for processes, managed services, ports, and monitoring
 
 This structure keeps the app close to the original mockup mood while making the main surface useful for real local-ops workflows.
 
@@ -174,7 +174,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - process cards can expand in place for more detail before the full inspector is needed
 - managed-service modal edits and automation toggles round-trip through the Electron bridge
 - managed lifecycle actions and explicit command hooks append to stdout/stderr log tails from the live runtime
-- automation history now records manual actions, runtime autostarts, profile runs, unexpected exits, and policy retries so the Automation page can explain what happened
+- automation history now records manual actions, runtime autostarts, profile runs, unexpected exits, and policy retries even though the service-level toggles now live on the Managed cards
 - observed-process draft creation jumps directly into the Managed workspace with a review banner and prefilled launch details
 - the Managed workspace now prioritizes card density, using a two-column desktop grid with modal editing so the main surface stays filled with services instead of form chrome
 - observed-process termination is framed as a live pid action rather than a managed-service edit

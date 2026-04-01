@@ -6,10 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-03-31 20:26 EDT
 
-- rebuilt the Managed workspace into a two-column service grid and replaced the always-open editor column with a modal create/edit window launched from the card actions
-- simplified the managed editor UI to the core service fields you asked for: name, optional description, start, stop, restart, color, and icon selection, while preserving the existing bridge-compatible defaults behind the scenes
-- hardened the new modal flow so background runtime refreshes do not clobber a draft while it is open
-- refreshed the README, overview, and roadmap to document the new Managed page workflow
+- removed the standalone Automation page and folded the service-level `autostart` and `watch ports` controls into each managed service card
+- kept the underlying automation history and runtime behavior intact while trimming the UI down to the controls that actually matter in the Managed workspace
+- refreshed the README, overview, and roadmap to document the five-view navigation and the new managed-card toggle flow
 
 ## 2026-03-31 20:10 EDT
 

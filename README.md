@@ -11,9 +11,10 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Convert an observed live process into a reviewed managed-service draft with prefilled command and runtime hints before saving anything to the catalog
 - Use a clearly marked observed-only kill action that terminates the current live pid without mutating the managed service list
 - Use a dedicated Managed workspace to browse a two-column grid of service cards, then open a focused modal to create, edit, color-code, and control user-authored service definitions
+- Toggle `autostart` and `watch ports` directly on each managed service card instead of leaving those controls on a separate automation page
 - Start, stop, and restart managed services from compact icon actions on managed cards instead of mixing control buttons into the live process list
 - Collapse helper subprocess noise on the Processes page so Chromium and Electron-based apps surface as one app-level row instead of a pile of zygotes and utility workers
-- Persist workspace state across refreshes, including the active view, filters, sidebar state, selected process, expanded cards, alerts, and automation toggles
+- Persist workspace state across refreshes, including the active view, filters, sidebar state, selected process, expanded cards, alerts, and managed-service toggle state
 - Use a cleaner overview dashboard with summary cards plus side-by-side process and port previews
 - Jump from dashboard previews into dedicated Processes and Ports pages with `See all` actions
 - Browse the Processes page as expandable three-column cards with the full inspector shown below
@@ -24,7 +25,6 @@ Mewl is a local operations cockpit for managing running services, watched ports,
 - Review imported legacy managed-service entries from older `mewl.services.json` shapes, see why they were normalized, and mark them as cleaned up from the Managed modal editor
 - Choose per-service restart policies with retry limits so Mewl can recover managed services after unhealthy exits
 - Update managed `autostart` and `watch ports` settings from the UI and persist them back to `mewl.services.json`
-- Boot managed startup profiles and quiet-mode presets through the Electron Automation view
 - Inspect a persisted automation history stream for starts, stops, profile runs, retries, and failures
 - Filter the alerts tray by severity, service, and time window when you need to narrow the current incident feed
 - Catch richer runtime issues including crash loops, reserved ports claimed by the wrong process, and unhealthy managed-service CPU or memory spikes
@@ -67,6 +67,7 @@ This is the first real product pass, not the final native implementation yet.
 - The Monitor page now keeps a rolling in-memory sample buffer through the Electron bridge and quietly refreshes it in the renderer so trend charts feel live instead of decorative.
 - The Monitor page now uses horizontal bands instead of a tall left-heavy split, and the Runtime Pulse waveform now fills the open Trend Canvas slot instead of moving into the sidebar.
 - The Managed page now keeps the workspace focused on a two-column service grid, with create and edit actions opening a modal instead of pinning a full editor column on the screen.
+- The old standalone Automation page has been folded away, and the service-level `autostart` and `watch ports` settings now live directly on the managed cards.
 
 ## Run Locally
 
@@ -161,7 +162,7 @@ Managed service launches are now intentionally strict: Mewl tokenizes plain comm
 
 The current product direction is intentionally utility-first rather than dashboard wallpaper:
 
-- collapsible left navigation rail for overview, processes, managed, ports, monitor, and automation
+- collapsible left navigation rail for overview, processes, managed, ports, and monitor
 - a dedicated Managed workspace for user-authored service cards and lifecycle control, with editing moved into a modal window instead of a persistent side panel
 - compact operational header with search, scan, and alert tray instead of hero copy
 - the shared search field now uses the Pink Pixel rose accent for its icon and focus glow
@@ -175,7 +176,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - dedicated Ports and Monitor pages for deeper operational detail
 - a rebalanced Monitor page layout that spreads trend charts across the workspace, including a sixth Runtime Pulse tile before dropping into snapshot and noisy-service bands
 - GPU telemetry folded into the host monitor and sidebar health card, with graceful fallback when the host bridge cannot read GPU data
-- a cleaner Automation page that keeps rule editing in one workspace instead of a separate scaffold-like state column
+- service-level automation controls kept on the managed cards instead of a separate mostly-empty automation workspace
 - expandable monitor-side resource cards so long process command lines stay hidden until requested
 - a lean managed-service editor that focuses on name, description, start/stop/restart commands, color, and icon selection while deeper runtime fields stay out of the default UI
 - structured process logs and session memory so the shell feels more like a real local cockpit

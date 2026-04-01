@@ -80,6 +80,7 @@ type RuntimeStatus = "loading" | "ready" | "error";
 type ProcessAction = "start" | "stop" | "restart" | "scan" | "kill";
 type AlertSeverityFilter = "all" | AlertSeverity;
 type AlertTimeWindow = "all" | "1h" | "24h" | "7d";
+type LogWorkspaceTab = "all" | "mewl" | "processes" | "containers" | "system";
 
 type PersistedWorkspaceState = {
   version: 1;
@@ -338,6 +339,14 @@ const unifiedLogLevelOptions: Array<{ id: "all" | UnifiedLogLevel; label: string
   { id: "debug", label: "Debug" },
 ];
 
+const logWorkspaceTabs: Array<{ id: LogWorkspaceTab; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "mewl", label: "Mewl" },
+  { id: "processes", label: "Processes" },
+  { id: "containers", label: "Containers" },
+  { id: "system", label: "System" },
+];
+
 const formatLogStamp = () =>
   new Intl.DateTimeFormat("en-US", {
     hour: "2-digit",
@@ -552,6 +561,7 @@ function App() {
   const [automationRules, setAutomationRules] = useState<AutomationRule[]>([]);
   const [automationHistory, setAutomationHistory] = useState<AutomationHistoryEntry[]>([]);
   const [logs, setLogs] = useState<UnifiedLogEvent[]>([]);
+  const [logWorkspaceTab, setLogWorkspaceTab] = useState<LogWorkspaceTab>("all");
   const [logQuery, setLogQuery] = useState("");
   const [logLevelFilter, setLogLevelFilter] = useState<"all" | UnifiedLogLevel>("all");
   const [logSourceFilter, setLogSourceFilter] = useState("all");
@@ -560,7 +570,7 @@ function App() {
   const [commandState, setCommandState] = useState(defaultCommandState);
   const [isPending, startActionTransition] = useTransition();
   const pausedLogBufferRef = useRef<UnifiedLogEvent[]>([]);
-  const logsScrollRef = useRef<HTMLDivElement | null>(null);
+  const logsViewportRef = useRef<HTMLDivElement | null>(null);
   const runtimeSource = getRuntimeSourceDescriptor();
   const isLiveElectronRuntime = runtimeSource.id === "electron";
   const managedKindMeta = managedKindCopy[managedDraft.kind];
@@ -903,10 +913,29 @@ function App() {
   });
   const deferredLogQuery = useDeferredValue(logQuery);
   const logSearchValue = deferredLogQuery.trim().toLowerCase();
+  const tabFilteredLogs = logs.filter((entry) => {
+    if (logWorkspaceTab === "mewl") {
+      return entry.category === "internal" || entry.category === "automation" || entry.category === "alert";
+    }
+
+    if (logWorkspaceTab === "processes") {
+      return entry.category === "managed-stdout" || entry.category === "managed-stderr" || entry.category === "container";
+    }
+
+    if (logWorkspaceTab === "containers") {
+      return entry.category === "container";
+    }
+
+    if (logWorkspaceTab === "system") {
+      return entry.category === "system";
+    }
+
+    return true;
+  });
   const logSourceOptions = Array.from(
-    new Set(logs.map((entry) => entry.sourceLabel).filter((value) => value.length > 0)),
+    new Set(tabFilteredLogs.map((entry) => entry.sourceLabel).filter((value) => value.length > 0)),
   );
-  const filteredLogs = logs.filter((entry) => {
+  const filteredLogs = tabFilteredLogs.filter((entry) => {
     const matchesSearch = logSearchValue
       ? [entry.source, entry.sourceLabel, entry.category, entry.message, entry.serviceName]
           .filter(Boolean)
@@ -918,14 +947,14 @@ function App() {
     const matchesSource = logSourceFilter === "all" ? true : entry.sourceLabel === logSourceFilter;
     return matchesSearch && matchesLevel && matchesSource;
   });
-  const visibleLogs = filteredLogs.slice(-logRenderWindow);
+  const visibleLogs = filteredLogs.slice(-logRenderWindow).reverse();
 
   useEffect(() => {
     if (activeView !== "logs" || !logFollowTail || visibleLogs.length === 0) {
       return;
     }
 
-    logsScrollRef.current?.scrollIntoView({ block: "end" });
+    logsViewportRef.current?.scrollTo({ top: 0 });
   }, [activeView, logFollowTail, visibleLogs]);
   const runtimeIndicatorTone =
     runtimeStatus === "ready"
@@ -949,6 +978,7 @@ function App() {
     setAlertSeverityFilter("all");
     setAlertServiceFilter("all");
     setAlertTimeWindow("all");
+    setLogWorkspaceTab("all");
     setLogQuery("");
     setLogLevelFilter("all");
     setLogSourceFilter("all");
@@ -2704,6 +2734,11 @@ function App() {
               Managed stdout and stderr, automation history, alert snapshots, and tagged Mewl
               internal diagnostics stream into one feed without replacing the inspector tails.
             </p>
+            <p className="mt-2 max-w-3xl text-sm text-white/44">
+              Docker logs now appear in this workspace for managed Docker services when Mewl can
+              derive a `docker logs` or `docker compose logs` target from the saved launch command,
+              and Linux system logs can stream in through the journald-backed system source.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -2748,6 +2783,26 @@ function App() {
           </div>
         </div>
 
+        <div className="mt-6 flex flex-wrap gap-2">
+          {logWorkspaceTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                setLogWorkspaceTab(tab.id);
+                setLogSourceFilter("all");
+              }}
+              className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition duration-300 ${
+                logWorkspaceTab === tab.id
+                  ? "border-white/14 bg-black/26 text-white"
+                  : "border-white/8 bg-black/18 text-white/42 hover:text-white/72"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         <div className="mt-6 grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_auto_auto]">
           <CandyInput
             value={logQuery}
@@ -2789,7 +2844,7 @@ function App() {
 
         <div className="mt-5 grid gap-3 lg:grid-cols-4">
           {[
-            ["Captured", `${logs.length}`],
+            ["Captured", `${tabFilteredLogs.length}`],
             ["Visible", `${visibleLogs.length}`],
             ["Buffered", `${pausedLogBufferRef.current.length}`],
             ["Sources", `${logSourceOptions.length}`],
@@ -2812,11 +2867,23 @@ function App() {
               <span className="size-2.5 rounded-full bg-emerald-300/90" />
             </div>
             <p className="text-[0.68rem] uppercase tracking-[0.22em] text-white/38">
-              {logsPaused ? "ui paused" : "live tail"}
+              {logsPaused ? "ui paused" : logFollowTail ? "live tail" : "manual browse"}
             </p>
           </div>
 
-          <div className="max-h-[72vh] overflow-y-auto px-3 py-3">
+          <div
+            ref={logsViewportRef}
+            onScroll={(event) => {
+              if (!logFollowTail) {
+                return;
+              }
+
+              if (event.currentTarget.scrollTop > 24) {
+                setLogFollowTail(false);
+              }
+            }}
+            className="max-h-[72vh] overflow-y-auto px-3 py-3"
+          >
             {visibleLogs.length > 0 ? (
               <div className="space-y-2 font-mono text-[0.84rem] leading-6">
                 {visibleLogs.map((entry) => (
@@ -2850,7 +2917,6 @@ function App() {
                     </p>
                   </article>
                 ))}
-                <div ref={logsScrollRef} />
               </div>
             ) : (
               <div className="rounded-[24px] border border-dashed border-white/10 bg-black/18 px-4 py-8 text-sm text-white/48">

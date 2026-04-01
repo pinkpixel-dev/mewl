@@ -4,7 +4,7 @@
 
 Mewl is a local process and port management app for Pink Pixel. This pass pushes the project from a visual scaffold into a more functional product shell by restoring workspace state, surfacing structured process logs, adding a dedicated unified diagnostics workspace, and handling runtime loading and failure states more deliberately.
 
-The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, wires real lifecycle control for Mewl-owned services, and now adds restart policies, a persisted automation history feed, a filterable alerts tray, a dedicated `Logs` workspace with live batched subscriptions plus `consola`-backed internal diagnostics, richer rolling monitor visuals, card-level managed-service toggles, and first-class managed service modes for `command`, `script`, and `docker` flows on top of the Managed workspace cleanup flow, observed-to-managed review path, and observed-only kill action.
+The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, wires real lifecycle control for Mewl-owned services, and now adds restart policies, a persisted automation history feed, a filterable alerts tray, a dedicated `Logs` workspace with an Electron-main broker plus adapter-style sources for internal diagnostics, managed runtime output, Docker-derived container logs, and Linux journald system logs, richer rolling monitor visuals, card-level managed-service toggles, and first-class managed service modes for `command`, `script`, and `docker` flows on top of the Managed workspace cleanup flow, observed-to-managed review path, and observed-only kill action.
 
 Version `1.0.0` marks the first Linux-ready release point for that product slice.
 
@@ -54,7 +54,11 @@ The current implementation includes:
 - a monitor composition that now runs left-to-right, with a three-column trend grid, a wider snapshot band, a two-column noisy-service lane, and the runtime waveform occupying the sixth trend tile
 - local state transitions that coordinate with the live Electron runtime bridge
 - a dedicated Logs workspace that hydrates a starting unified log snapshot, then appends live log batches without disturbing the narrow per-process inspector tails
-- renderer-local log controls for search, severity/source filtering, pause/resume, follow-tail, clear, and export
+- an Electron-main log broker that now owns retention, batching, and adapter startup for the unified diagnostics feed
+- log-page tabs for `All`, `Mewl`, `Processes`, `Containers`, and `System`, so internal diagnostics, runtime output, and Linux host logs can be reviewed independently inside the same workspace
+- managed Docker services that can expose derivable `docker logs` or `docker compose logs` targets now contribute container log snapshots into the unified feed
+- a journald-backed system adapter that can stream Linux host logs into the same feed when `journalctl` is available
+- renderer-local log controls for search, severity/source filtering, pause/resume, newest-first log ordering, auto-follow that disengages when you scroll away from the live edge, clear, and export
 - workspace persistence for the active view, filters, expanded cards, selected process, alerts, and managed-service toggle state
 - an alerts tray that can now filter the current incident feed by severity, service, and time window
 - loading, empty, and error states for runtime hydration and filtered views

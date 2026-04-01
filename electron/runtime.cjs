@@ -18,13 +18,6 @@ const unifiedLogFlushDelayMs = 140;
 const repoRoot = process.cwd();
 const managedServiceState = new Map();
 const metricHistoryState = new Map();
-const unifiedLogState = {
-  events: [],
-  eventIds: new Set(),
-  pending: [],
-  flushTimer: null,
-  listener: null,
-};
 let autoStartInitialized = false;
 const defaultInheritedEnvKeys = ["PATH", "HOME", "LANG", "TERM", "USER", "LOGNAME", "SHELL"];
 const serviceConfigFileName = "mewl.services.json";
@@ -44,6 +37,108 @@ const scriptInterpreterByExtension = {
   ".cjs": "node",
   ".mjs": "node",
 };
+
+function createLogBroker({
+  maxEvents,
+  flushDelayMs,
+}) {
+  const state = {
+    events: [],
+    eventIds: new Set(),
+    pending: [],
+    flushTimer: null,
+    listener: null,
+    adapters: [],
+    started: false,
+  };
+
+  const flush = () => {
+    state.flushTimer = null;
+
+    if (!state.listener || state.pending.length === 0) {
+      state.pending = [];
+      return;
+    }
+
+    const batch = state.pending.slice();
+    state.pending = [];
+    state.listener(batch);
+  };
+
+  const queueFlush = () => {
+    if (state.flushTimer) {
+      return;
+    }
+
+    state.flushTimer = setTimeout(flush, flushDelayMs);
+  };
+
+  return {
+    emit(event, { broadcast = false } = {}) {
+      if (!event || typeof event.id !== "string" || state.eventIds.has(event.id)) {
+        return;
+      }
+
+      state.eventIds.add(event.id);
+      state.events.push(event);
+
+      while (state.events.length > maxEvents) {
+        const removed = state.events.shift();
+        if (removed?.id) {
+          state.eventIds.delete(removed.id);
+        }
+      }
+
+      if (broadcast) {
+        state.pending.push(event);
+        queueFlush();
+      }
+    },
+    getSnapshot() {
+      return state.events.slice();
+    },
+    setListener(listener) {
+      state.listener = typeof listener === "function" ? listener : null;
+    },
+    registerAdapter(adapter) {
+      state.adapters.push(adapter);
+    },
+    async ensureStarted() {
+      if (state.started) {
+        return;
+      }
+
+      state.started = true;
+      for (const adapter of state.adapters) {
+        try {
+          await adapter.start();
+        } catch (error) {
+          state.started = true;
+          throw error;
+        }
+      }
+    },
+    async stop() {
+      if (state.flushTimer) {
+        clearTimeout(state.flushTimer);
+        state.flushTimer = null;
+      }
+
+      for (const adapter of state.adapters) {
+        try {
+          await adapter.stop();
+        } catch (_error) {
+          // Swallow shutdown cleanup failures to avoid blocking app quit.
+        }
+      }
+    },
+  };
+}
+
+const logBroker = createLogBroker({
+  maxEvents: unifiedLogLimit,
+  flushDelayMs: unifiedLogFlushDelayMs,
+});
 
 function formatInternalLogMessage(args = []) {
   return args
@@ -65,54 +160,16 @@ function formatInternalLogMessage(args = []) {
     .join(" ");
 }
 
-function flushUnifiedLogBatch() {
-  unifiedLogState.flushTimer = null;
-
-  if (!unifiedLogState.listener || unifiedLogState.pending.length === 0) {
-    unifiedLogState.pending = [];
-    return;
-  }
-
-  const batch = unifiedLogState.pending.slice();
-  unifiedLogState.pending = [];
-  unifiedLogState.listener(batch);
-}
-
-function queueUnifiedLogFlush() {
-  if (unifiedLogState.flushTimer) {
-    return;
-  }
-
-  unifiedLogState.flushTimer = setTimeout(flushUnifiedLogBatch, unifiedLogFlushDelayMs);
-}
-
 function rememberUnifiedLogEvent(event, { broadcast = false } = {}) {
-  if (!event || typeof event.id !== "string" || unifiedLogState.eventIds.has(event.id)) {
-    return;
-  }
-
-  unifiedLogState.eventIds.add(event.id);
-  unifiedLogState.events.push(event);
-
-  while (unifiedLogState.events.length > unifiedLogLimit) {
-    const removed = unifiedLogState.events.shift();
-    if (removed?.id) {
-      unifiedLogState.eventIds.delete(removed.id);
-    }
-  }
-
-  if (broadcast) {
-    unifiedLogState.pending.push(event);
-    queueUnifiedLogFlush();
-  }
+  logBroker.emit(event, { broadcast });
 }
 
 function getUnifiedLogSnapshot() {
-  return unifiedLogState.events.slice();
+  return logBroker.getSnapshot();
 }
 
 function setRuntimeLogBatchListener(listener) {
-  unifiedLogState.listener = typeof listener === "function" ? listener : null;
+  logBroker.setListener(listener);
 }
 
 function normalizeConsolaLevel(type) {
@@ -149,6 +206,156 @@ const runtimeLogger = mewlLogger.withTag("runtime");
 const processManagerLogger = mewlLogger.withTag("process-manager");
 const automationLogger = mewlLogger.withTag("automation");
 const portsLogger = mewlLogger.withTag("ports");
+
+function normalizeJournaldLevel(priority) {
+  const value = Number.parseInt(priority, 10);
+
+  if (!Number.isFinite(value)) {
+    return "info";
+  }
+
+  if (value <= 2) {
+    return "fatal";
+  }
+
+  if (value === 3) {
+    return "error";
+  }
+
+  if (value === 4) {
+    return "warn";
+  }
+
+  if (value >= 7) {
+    return "debug";
+  }
+
+  return "info";
+}
+
+function createJournaldAdapter() {
+  let child = null;
+  let buffer = "";
+  let started = false;
+  let stopping = false;
+
+  const emitLine = (line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    try {
+      const payload = JSON.parse(trimmed);
+      const timestampMicros = Number.parseInt(payload.__REALTIME_TIMESTAMP || "", 10);
+      const timestamp = Number.isFinite(timestampMicros)
+        ? new Date(Math.floor(timestampMicros / 1000)).toISOString()
+        : new Date().toISOString();
+      const serviceName =
+        payload.SYSLOG_IDENTIFIER ||
+        payload._SYSTEMD_UNIT ||
+        payload._COMM ||
+        "system";
+      const message =
+        typeof payload.MESSAGE === "string"
+          ? payload.MESSAGE
+          : payload.MESSAGE == null
+            ? ""
+            : String(payload.MESSAGE);
+
+      if (!message) {
+        return;
+      }
+
+      rememberUnifiedLogEvent(
+        {
+          id: `journald-${payload.__CURSOR || `${timestamp}-${Math.random().toString(36).slice(2, 8)}`}`,
+          timestamp,
+          level: normalizeJournaldLevel(payload.PRIORITY),
+          source: serviceName,
+          sourceLabel: serviceName,
+          category: "system",
+          message,
+          stream: "system",
+        },
+        { broadcast: true },
+      );
+    } catch (_error) {
+      // Ignore partial or malformed journal lines without taking down the adapter.
+    }
+  };
+
+  const consumeBuffer = () => {
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      emitLine(line);
+    }
+  };
+
+  return {
+    name: "journald",
+    async start() {
+      if (started || process.platform !== "linux") {
+        return;
+      }
+
+      started = true;
+      stopping = false;
+      runtimeLogger.info("Starting journald log adapter.");
+      child = spawn(
+        "journalctl",
+        ["-f", "-n", "120", "-o", "json", "--no-pager"],
+        {
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
+
+      child.stdout?.setEncoding("utf8");
+      child.stdout?.on("data", (chunk) => {
+        buffer += chunk;
+        consumeBuffer();
+      });
+
+      child.stderr?.setEncoding("utf8");
+      child.stderr?.on("data", (chunk) => {
+        const message = String(chunk).trim();
+        if (message) {
+          runtimeLogger.debug("journald adapter stderr.", { message });
+        }
+      });
+
+      child.on("error", (error) => {
+        runtimeLogger.warn("journald adapter could not start.", {
+          message: error.message,
+        });
+      });
+
+      child.on("exit", (code, signal) => {
+        child = null;
+        buffer = "";
+
+        if (!stopping) {
+          runtimeLogger.warn("journald adapter stopped.", {
+            code,
+            signal,
+          });
+        }
+      });
+    },
+    async stop() {
+      stopping = true;
+      if (child && child.exitCode === null) {
+        child.kill("SIGTERM");
+      }
+      child = null;
+      buffer = "";
+      started = false;
+    },
+  };
+}
+
+logBroker.registerAdapter(createJournaldAdapter());
 
 function uniqueList(values) {
   return Array.from(new Set(values.filter(Boolean)));
@@ -209,7 +416,10 @@ function formatStamp(date = new Date()) {
 }
 
 function createLogEntry(level, text) {
-  const timestamp = new Date().toISOString();
+  return createTimedLogEntry(level, text);
+}
+
+function createTimedLogEntry(level, text, timestamp = new Date().toISOString()) {
   return {
     id: `live-log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     stamp: formatStamp(new Date(timestamp)),
@@ -325,6 +535,90 @@ function rememberManagedInspectorLogs(services) {
   }
 }
 
+function normalizeDockerLogLine(rawLine) {
+  const line = String(rawLine || "").trim();
+  if (!line) {
+    return null;
+  }
+
+  const match = line.match(/^(\d{4}-\d{2}-\d{2}T[^ ]+)\s+(.*)$/);
+  if (match) {
+    return {
+      timestamp: match[1],
+      message: match[2] || line,
+    };
+  }
+
+  return {
+    timestamp: new Date().toISOString(),
+    message: line,
+  };
+}
+
+async function collectManagedDockerLogs(service) {
+  const commandLine = getManagedDockerLogCommand(service);
+  if (!commandLine) {
+    return;
+  }
+
+  const serviceState = getManagedState(service.id);
+  const cwd = resolveServiceCwd(service.cwd);
+  const env = buildManagedEnvironment(service);
+  const { executable, args } = await resolveCommandSpec(commandLine, env.PATH, cwd);
+
+  try {
+    const result = await execFileAsync(executable, args, {
+      cwd,
+      env,
+      maxBuffer: 12 * 1024 * 1024,
+    });
+
+    const lines = String(result.stdout || "")
+      .split(/\r?\n/)
+      .map(normalizeDockerLogLine)
+      .filter(Boolean);
+
+    for (const line of lines) {
+      const fingerprint = `${line.timestamp}:${line.message}`;
+      if (serviceState.dockerLogFingerprints.has(fingerprint)) {
+        continue;
+      }
+
+      serviceState.dockerLogFingerprints.add(fingerprint);
+      if (serviceState.dockerLogFingerprints.size > 200) {
+        const [first] = serviceState.dockerLogFingerprints;
+        if (first) {
+          serviceState.dockerLogFingerprints.delete(first);
+        }
+      }
+
+      const entry = createTimedLogEntry("info", line.message, line.timestamp);
+      appendManagedLogEntry(serviceState.logs, "stdout", entry, service, { emitUnified: false });
+      rememberUnifiedLogEvent(
+        {
+          id: `container-${service.id}-${entry.id}`,
+          timestamp: line.timestamp,
+          level: "info",
+          source: service.id,
+          sourceLabel: service.name,
+          category: "container",
+          message: line.message,
+          serviceId: service.id,
+          serviceName: service.name,
+        },
+        { broadcast: true },
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Docker logs could not be collected.";
+    portsLogger.debug("Skipping docker log collection.", {
+      serviceId: service.id,
+      serviceName: service.name,
+      message,
+    });
+  }
+}
+
 function trimAutomationHistory(entries) {
   return entries.slice(0, automationHistoryLimit);
 }
@@ -381,10 +675,11 @@ function normalizeProcessLevelToUnified(level) {
   return "info";
 }
 
-function appendManagedLogEntry(logs, stream, entry, service) {
+function appendManagedLogEntry(logs, stream, entry, service, options = {}) {
+  const { emitUnified = true } = options;
   logs[stream] = trimLogEntries([...logs[stream], entry]);
 
-  if (!service) {
+  if (!service || !emitUnified) {
     return;
   }
 
@@ -426,6 +721,7 @@ function getManagedState(serviceId) {
       stdout: [],
       stderr: [],
     },
+    dockerLogFingerprints: new Set(),
   };
   managedServiceState.set(serviceId, created);
   return created;
@@ -932,6 +1228,111 @@ function createDockerRunStopCommand(commandLine) {
   return "";
 }
 
+function createDockerComposeLogCommand(commandLine) {
+  const tokens = parseCommandLine(commandLine);
+  if (tokens.length < 3) {
+    return "";
+  }
+
+  const usesLegacyCompose = tokens[0] === "docker-compose";
+  const composeIndex = usesLegacyCompose ? 0 : tokens[0] === "docker" && tokens[1] === "compose" ? 1 : -1;
+  if (composeIndex === -1) {
+    return "";
+  }
+
+  const upIndex = tokens.findIndex((token, index) => index > composeIndex && token === "up");
+  if (upIndex === -1) {
+    return "";
+  }
+
+  const composePrefix = usesLegacyCompose ? ["docker-compose"] : ["docker", "compose"];
+  const prefixOptions = tokens.slice(composeIndex + 1, upIndex);
+  const trailingTokens = tokens.slice(upIndex + 1);
+  const composeOptionsWithValues = new Set(["-f", "--file", "--project-directory", "-p", "--project-name", "--profile", "--env-file"]);
+  const upOnlyFlags = new Set([
+    "-d",
+    "--detach",
+    "--build",
+    "--force-recreate",
+    "--no-recreate",
+    "--renew-anon-volumes",
+    "--abort-on-container-exit",
+    "--abort-on-container-failure",
+    "--attach",
+    "--attach-dependencies",
+    "--always-recreate-deps",
+    "--menu",
+    "--no-attach",
+    "--no-build",
+    "--no-color",
+    "--no-deps",
+    "--no-log-prefix",
+    "--pull",
+    "--quiet-build",
+    "--quiet-pull",
+    "--remove-orphans",
+    "--scale",
+    "--timeout",
+    "--timestamps",
+    "--wait",
+    "--wait-timeout",
+  ]);
+
+  const serviceNames = [];
+  for (let index = 0; index < trailingTokens.length; index += 1) {
+    const token = trailingTokens[index];
+    if (!token.startsWith("-")) {
+      serviceNames.push(token);
+      continue;
+    }
+
+    if (composeOptionsWithValues.has(token)) {
+      index += 1;
+      continue;
+    }
+
+    if (upOnlyFlags.has(token)) {
+      if (token === "--scale" || token === "--attach" || token === "--no-attach" || token === "--profile" || token === "--env-file") {
+        index += 1;
+      }
+      continue;
+    }
+
+    return "";
+  }
+
+  return [
+    ...composePrefix,
+    ...prefixOptions,
+    "logs",
+    "--timestamps",
+    "--tail",
+    "20",
+    ...serviceNames,
+  ].join(" ");
+}
+
+function createDockerRunLogCommand(commandLine) {
+  const tokens = parseCommandLine(commandLine);
+  if (tokens.length < 2 || tokens[0] !== "docker" || tokens[1] !== "run") {
+    return "";
+  }
+
+  for (let index = 2; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === "--name" && typeof tokens[index + 1] === "string" && tokens[index + 1].length > 0) {
+      return `docker logs --timestamps --tail 20 ${tokens[index + 1]}`;
+    }
+
+    if (token.startsWith("--name=")) {
+      const name = token.slice("--name=".length);
+      return name ? `docker logs --timestamps --tail 20 ${name}` : "";
+    }
+  }
+
+  return "";
+}
+
 function getManagedStopCommand(service) {
   const explicitStopCommand = typeof service.stopCommand === "string" ? service.stopCommand.trim() : "";
   if (explicitStopCommand) {
@@ -949,6 +1350,23 @@ function getManagedStopCommand(service) {
 
   try {
     return createDockerComposeStopCommand(startCommand) || createDockerRunStopCommand(startCommand);
+  } catch (_error) {
+    return "";
+  }
+}
+
+function getManagedDockerLogCommand(service) {
+  if (service.kind !== "docker") {
+    return "";
+  }
+
+  const startCommand = String(service.startCommand || "").trim();
+  if (!startCommand) {
+    return "";
+  }
+
+  try {
+    return createDockerComposeLogCommand(startCommand) || createDockerRunLogCommand(startCommand);
   } catch (_error) {
     return "";
   }
@@ -2507,6 +2925,7 @@ function buildAlerts(processes, ports, metrics, services, history) {
 
 async function hydrateRuntimeSnapshot() {
   runtimeLogger.debug("Hydrating runtime snapshot.");
+  await logBroker.ensureStarted();
   await initializeManagedServices();
 
   const [cpuPercent, networkUsage, diskPercent, gpuUsage, rawProcesses, rawBindings, config] =
@@ -2520,6 +2939,12 @@ async function hydrateRuntimeSnapshot() {
       loadManagedConfig(),
     ]);
   const { services, profiles, history } = config;
+
+  await Promise.all(
+    services
+      .filter((service) => service.kind === "docker")
+      .map((service) => collectManagedDockerLogs(service)),
+  );
 
   const memoryPercent = clamp(
     Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100),
@@ -3097,6 +3522,8 @@ async function shutdownManagedServices() {
       await stopManagedService(service, "runtime");
     }
   }
+
+  await logBroker.stop();
 }
 
 module.exports = {

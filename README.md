@@ -59,7 +59,10 @@ Version `1.0.0` is the first Linux-ready release of Mewl, shipping the Electron 
 - Update managed `autostart` and `watch ports` settings from the UI and persist them back to `mewl.services.json`
 - Inspect a persisted automation history stream for starts, stops, profile runs, retries, and failures
 - Use the dedicated `Logs` workspace to follow one unified diagnostics feed for managed stdout/stderr, automation history, alert snapshots, and tagged Mewl-internal runtime events
-- Filter the Logs feed by search text, severity, and source, then pause UI consumption, follow the live tail, clear the local view, or export the current window to newline-delimited JSON
+- Switch the Logs page between `All`, `Mewl`, `Processes`, `Containers`, and `System` tabs so internal diagnostics, managed runtime output, Docker output, and Linux host logs can be reviewed separately without losing the unified feed
+- Pull Docker container logs into the Logs workspace for managed Docker services when Mewl can derive a `docker logs` or `docker compose logs` target from the saved launch command
+- Pull Linux host logs into the Logs workspace through a journald-backed system source inside the Electron runtime broker
+- Filter the Logs feed by search text, severity, and source, then pause UI consumption, keep the newest entries pinned at the top until you scroll away from the live edge, clear the local view, or export the current window to newline-delimited JSON
 - Filter the alerts tray by severity, service, and time window when you need to narrow the current incident feed
 - Catch richer runtime issues including crash loops, reserved ports claimed by the wrong process, and unhealthy managed-service CPU or memory spikes
 - Read rolling trend visuals for CPU, memory, disk, network, and GPU from the Monitor page instead of only seeing single-snapshot pressure bars
@@ -239,6 +242,10 @@ The dedicated `Logs` workspace is now part of the shipped `1.0.0` desktop shell.
 
 - Electron main owns log aggregation, retention, and batched append delivery over the preload bridge.
 - Managed stdout/stderr, automation history, alert snapshots, and Mewl-internal diagnostics all land in one normalized feed.
+- Electron main now follows a lighter adapter-plus-broker model for logging, which makes sources like journald fit naturally beside managed process output and Docker-derived container logs.
+- The Logs page now provides dedicated `Mewl`, `Processes`, `Containers`, and `System` views on top of the unified feed, so you can focus on internal diagnostics, runtime output, or Linux host logs without changing the underlying capture model.
+- Managed Docker services can contribute container logs when their saved launch command gives Mewl enough information to derive `docker logs` or `docker compose logs` safely.
+- Linux system logs now stream through a journald adapter when Mewl is running on a Linux host with `journalctl` available.
 - `consola` powers tagged Mewl-internal logging with sources like `runtime`, `process-manager`, `automation`, and `ports`, while the existing per-process inspector tails stay intact as the narrow detail view.
 
 ## Design Direction

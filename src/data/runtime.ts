@@ -176,9 +176,11 @@ export type UnifiedLogLevel =
 export type UnifiedLogCategory =
   | "managed-stdout"
   | "managed-stderr"
+  | "container"
   | "automation"
   | "alert"
-  | "internal";
+  | "internal"
+  | "system";
 
 export type UnifiedLogEvent = {
   id: string;
@@ -190,7 +192,7 @@ export type UnifiedLogEvent = {
   message: string;
   serviceId?: string;
   serviceName?: string;
-  stream?: "stdout" | "stderr";
+  stream?: "stdout" | "stderr" | "system";
 };
 
 export type RuntimeSnapshot = {

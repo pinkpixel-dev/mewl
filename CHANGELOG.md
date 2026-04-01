@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-04-01 13:37 EDT
+
+- changed the Logs workspace auto-follow behavior so scrolling away from the newest entries stops live pinning instead of snapping the view back during active log flow
+- refreshed the README, overview, and roadmap so the smarter live-edge browsing behavior is documented consistently
+
+## 2026-04-01 13:31 EDT
+
+- flipped the Logs workspace ordering so the newest matching entries now render at the top of the page instead of the bottom
+- refreshed the README, overview, and roadmap so the newest-first diagnostics behavior is documented consistently
+
+## 2026-04-01 13:21 EDT
+
+- refactored the Electron logging runtime around a clearer broker pattern so unified event retention, batching, and adapter startup live in one place
+- added a Linux journald adapter that streams host system logs into the unified feed and surfaced a dedicated `System` tab on the Logs page
+- extended the Logs workspace with `All`, `Mewl`, `Processes`, and `Containers` views so internal diagnostics and runtime output can be separated quickly
+- added managed Docker log capture when a saved Docker service command can be translated into a safe `docker logs` or `docker compose logs` query, keeping the feature scoped to derivable managed services
+- refreshed the README, overview, roadmap, architecture notes, and release notes so the broker-plus-adapter direction, system-log source, and expanded logs-tab coverage are documented consistently
+
 ## 2026-04-01 12:19 EDT
 
 - shipped the new `Logs` workspace with persisted navigation, a dense terminal-style feed, search, level and source filters, follow-tail, UI-local pause and resume, clear, and export controls

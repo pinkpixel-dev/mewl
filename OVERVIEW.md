@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Mewl is a local process and port management app for Pink Pixel. This pass pushes the project from a visual scaffold into a more functional product shell by restoring workspace state, surfacing structured process logs, and handling runtime loading and failure states more deliberately.
+Mewl is a local process and port management app for Pink Pixel. This pass pushes the project from a visual scaffold into a more functional product shell by restoring workspace state, surfacing structured process logs, adding a dedicated unified diagnostics workspace, and handling runtime loading and failure states more deliberately.
 
-The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, wires real lifecycle control for Mewl-owned services, and now adds restart policies, a persisted automation history feed, a filterable alerts tray, richer rolling monitor visuals, card-level managed-service toggles, and first-class managed service modes for `command`, `script`, and `docker` flows on top of the Managed workspace cleanup flow, observed-to-managed review path, and observed-only kill action.
+The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, wires real lifecycle control for Mewl-owned services, and now adds restart policies, a persisted automation history feed, a filterable alerts tray, a dedicated `Logs` workspace with live batched subscriptions plus `consola`-backed internal diagnostics, richer rolling monitor visuals, card-level managed-service toggles, and first-class managed service modes for `command`, `script`, and `docker` flows on top of the Managed workspace cleanup flow, observed-to-managed review path, and observed-only kill action.
 
 Version `1.0.0` marks the first Linux-ready release point for that product slice.
 
@@ -28,7 +28,7 @@ Defines the main product shell, workspace views, action handlers, search/filter 
 
 The current implementation includes:
 
-- a collapsible left navigation rail for overview, processes, managed, ports, and monitor
+- a collapsible left navigation rail for overview, processes, managed, logs, ports, and monitor
 - a compact action/search header with no large banner copy
 - a base-aware branded shell icon path so the sidebar app icon and favicon still render in packaged `file://` builds
 - a rose-accented shared search field that matches the Pink Pixel brand color
@@ -53,6 +53,8 @@ The current implementation includes:
 - a monitor view that now pairs live pressure bars with rolling SVG trend charts fed by a session-local sample buffer
 - a monitor composition that now runs left-to-right, with a three-column trend grid, a wider snapshot band, a two-column noisy-service lane, and the runtime waveform occupying the sixth trend tile
 - local state transitions that coordinate with the live Electron runtime bridge
+- a dedicated Logs workspace that hydrates a starting unified log snapshot, then appends live log batches without disturbing the narrow per-process inspector tails
+- renderer-local log controls for search, severity/source filtering, pause/resume, follow-tail, clear, and export
 - workspace persistence for the active view, filters, expanded cards, selected process, alerts, and managed-service toggle state
 - an alerts tray that can now filter the current incident feed by severity, service, and time window
 - loading, empty, and error states for runtime hydration and filtered views

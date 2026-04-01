@@ -4,6 +4,7 @@ const {
   hydrateRuntimeSnapshot,
   performProcessAction,
   shutdownManagedServices,
+  setRuntimeLogBatchListener,
   updateManagedService,
   createManagedService,
   removeManagedService,
@@ -74,6 +75,13 @@ async function bootstrap() {
   );
 
   await app.whenReady();
+  setRuntimeLogBatchListener((events) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send("mewl:logs-batch", events);
+      }
+    }
+  });
   createWindow();
 
   app.on("activate", () => {

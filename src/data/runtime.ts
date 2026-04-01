@@ -2,6 +2,7 @@ export type WorkspaceView =
   | "overview"
   | "processes"
   | "managed"
+  | "logs"
   | "ports"
   | "monitor";
 
@@ -16,6 +17,7 @@ export type ProcessLogLevel = "info" | "debug" | "warning" | "error";
 export type ProcessLogEntry = {
   id: string;
   stamp: string;
+  timestamp?: string;
   level: ProcessLogLevel;
   text: string;
 };
@@ -161,6 +163,36 @@ export type AutomationRule = {
   enabled: boolean;
 };
 
+export type UnifiedLogLevel =
+  | "fatal"
+  | "error"
+  | "warn"
+  | "log"
+  | "info"
+  | "success"
+  | "debug"
+  | "trace";
+
+export type UnifiedLogCategory =
+  | "managed-stdout"
+  | "managed-stderr"
+  | "automation"
+  | "alert"
+  | "internal";
+
+export type UnifiedLogEvent = {
+  id: string;
+  timestamp: string;
+  level: UnifiedLogLevel;
+  source: string;
+  sourceLabel: string;
+  category: UnifiedLogCategory;
+  message: string;
+  serviceId?: string;
+  serviceName?: string;
+  stream?: "stdout" | "stderr";
+};
+
 export type RuntimeSnapshot = {
   processes: ManagedProcess[];
   ports: PortBinding[];
@@ -169,4 +201,5 @@ export type RuntimeSnapshot = {
   monitorHistory: MonitorHistorySeries[];
   automationRules: AutomationRule[];
   automationHistory: AutomationHistoryEntry[];
+  logs: UnifiedLogEvent[];
 };

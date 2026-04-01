@@ -2,6 +2,7 @@ import {
   type ManagedServiceDraft,
   type ManagedServiceUpdate,
   type RuntimeSnapshot,
+  type UnifiedLogEvent,
 } from "../data/runtime";
 
 export type HostLayerChoice = "electron";
@@ -26,6 +27,7 @@ export type RuntimeSourceDescriptor = {
 
 export type MewlHostBridge = {
   hydrateRuntimeSnapshot: () => Promise<RuntimeSnapshot>;
+  subscribeToLogs?: (listener: (events: UnifiedLogEvent[]) => void) => () => void;
   performProcessAction?: (
     action: "start" | "stop" | "restart" | "scan" | "kill",
     processId: string,

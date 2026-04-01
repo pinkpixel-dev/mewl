@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-04-01 12:19 EDT
+
+- shipped the new `Logs` workspace with persisted navigation, a dense terminal-style feed, search, level and source filters, follow-tail, UI-local pause and resume, clear, and export controls
+- added a normalized unified log contract plus Electron batched log subscriptions so managed stdout/stderr, automation history, alert snapshots, and Mewl-owned internal diagnostics can stream into one renderer feed
+- integrated `consola` in the Electron runtime with tagged internal sources such as `runtime`, `process-manager`, `automation`, and `ports`, using a custom reporter bridge instead of replacing direct child-process capture
+- refreshed the README, overview, roadmap, architecture notes, and release notes so the shipped `1.0.0` diagnostics slice is documented consistently
+
+## 2026-04-01 11:57 EDT
+
+- added a dedicated roadmap and implementation-doc plan for a future `Logs` workspace built around Electron-side aggregation and a `consola` reporter bridge
+- refreshed the README, overview, architecture notes, and logs plan so the next-step diagnostics direction is documented consistently across the project
+
 ## 2026-03-31 23:54 EDT
 
 - added a release screenshot gallery to the README for the overview, processes, managed, ports, and monitor workspaces

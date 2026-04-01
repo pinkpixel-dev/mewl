@@ -3,6 +3,7 @@ import {
   startTransition,
   useEffect,
   useDeferredValue,
+  useRef,
   useState,
   useTransition,
 } from "react";
@@ -29,6 +30,8 @@ import {
   ShieldCheck,
   Square,
   Terminal,
+  Pause,
+  Play as PlayIcon,
   Trash2,
   Waypoints,
   Workflow,
@@ -62,6 +65,8 @@ import {
   type PortStatus,
   type ProcessStatus,
   type RuntimeSnapshot,
+  type UnifiedLogEvent,
+  type UnifiedLogLevel,
   type WorkspaceView,
 } from "./data/runtime";
 import {
@@ -94,6 +99,7 @@ type PersistedWorkspaceState = {
     automationRules: AutomationRule[];
     automationHistory: AutomationHistoryEntry[];
     monitorHistory: MonitorHistorySeries[];
+    logs: UnifiedLogEvent[];
     commandState: string;
   };
 };
@@ -123,6 +129,7 @@ const viewMeta: Array<{
   { id: "overview", label: "Overview", icon: LayoutDashboard, hex: accent.rose },
   { id: "processes", label: "Processes", icon: Server, hex: accent.cyan },
   { id: "managed", label: "Managed", icon: Sparkles, hex: accent.rose },
+  { id: "logs", label: "Logs", icon: Terminal, hex: accent.green },
   { id: "ports", label: "Ports", icon: Waypoints, hex: accent.purple },
   { id: "monitor", label: "Monitor", icon: Activity, hex: accent.amber },
 ];
@@ -189,6 +196,8 @@ const panelClass = "glass-panel rounded-[34px] p-5 sm:p-6";
 const delay = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 const workspaceStorageKey = "mewl.workspace.v1";
 const processLogTailLimit = 10;
+const unifiedLogLimit = 1200;
+const logRenderWindow = 400;
 const defaultCommandState = "Ready to manage local services, ports, and runtime pressure.";
 const appIconUrl = `${import.meta.env.BASE_URL}icon.png`;
 
@@ -309,6 +318,26 @@ const logLevelTextClassMap: Record<ProcessLogLevel, string> = {
   error: "text-rose-200",
 };
 
+const unifiedLogLevelHexMap: Record<UnifiedLogLevel, string> = {
+  fatal: accent.rose,
+  error: accent.rose,
+  warn: accent.amber,
+  log: "rgba(255,255,255,0.7)",
+  info: accent.cyan,
+  success: accent.green,
+  debug: accent.purple,
+  trace: "#94a3b8",
+};
+
+const unifiedLogLevelOptions: Array<{ id: "all" | UnifiedLogLevel; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "error", label: "Error" },
+  { id: "warn", label: "Warn" },
+  { id: "info", label: "Info" },
+  { id: "success", label: "Success" },
+  { id: "debug", label: "Debug" },
+];
+
 const formatLogStamp = () =>
   new Intl.DateTimeFormat("en-US", {
     hour: "2-digit",
@@ -318,6 +347,36 @@ const formatLogStamp = () =>
   }).format(new Date());
 
 const trimLogTail = (entries: ProcessLogEntry[]) => entries.slice(-processLogTailLimit);
+
+const mergeLogEvents = (current: UnifiedLogEvent[], incoming: UnifiedLogEvent[]) => {
+  if (incoming.length === 0) {
+    return current;
+  }
+
+  const merged = new Map(current.map((entry) => [entry.id, entry] as const));
+
+  for (const entry of incoming) {
+    merged.set(entry.id, entry);
+  }
+
+  return [...merged.values()]
+    .sort((left, right) => left.timestamp.localeCompare(right.timestamp))
+    .slice(-unifiedLogLimit);
+};
+
+const formatUnifiedLogStamp = (timestamp: string) => {
+  const parsed = Date.parse(timestamp);
+  if (Number.isNaN(parsed)) {
+    return "--:--:--";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date(parsed));
+};
 
 const parseAlertAgeHours = (stamp: string) => {
   if (stamp === "now") {
@@ -450,6 +509,7 @@ function readPersistedWorkspace(): PersistedWorkspaceState | null {
       monitorHistory: Array.isArray(runtime.monitorHistory)
         ? (runtime.monitorHistory as MonitorHistorySeries[])
         : [],
+      logs: Array.isArray(runtime.logs) ? (runtime.logs as UnifiedLogEvent[]) : [],
       commandState:
         typeof runtime.commandState === "string" ? runtime.commandState : defaultCommandState,
     },
@@ -491,11 +551,32 @@ function App() {
   const [monitorHistory, setMonitorHistory] = useState<MonitorHistorySeries[]>([]);
   const [automationRules, setAutomationRules] = useState<AutomationRule[]>([]);
   const [automationHistory, setAutomationHistory] = useState<AutomationHistoryEntry[]>([]);
+  const [logs, setLogs] = useState<UnifiedLogEvent[]>([]);
+  const [logQuery, setLogQuery] = useState("");
+  const [logLevelFilter, setLogLevelFilter] = useState<"all" | UnifiedLogLevel>("all");
+  const [logSourceFilter, setLogSourceFilter] = useState("all");
+  const [logFollowTail, setLogFollowTail] = useState(true);
+  const [logsPaused, setLogsPaused] = useState(false);
   const [commandState, setCommandState] = useState(defaultCommandState);
   const [isPending, startActionTransition] = useTransition();
+  const pausedLogBufferRef = useRef<UnifiedLogEvent[]>([]);
+  const logsScrollRef = useRef<HTMLDivElement | null>(null);
   const runtimeSource = getRuntimeSourceDescriptor();
   const isLiveElectronRuntime = runtimeSource.id === "electron";
   const managedKindMeta = managedKindCopy[managedDraft.kind];
+
+  const appendUnifiedLogs = (events: UnifiedLogEvent[]) => {
+    if (events.length === 0) {
+      return;
+    }
+
+    if (logsPaused) {
+      pausedLogBufferRef.current = mergeLogEvents(pausedLogBufferRef.current, events);
+      return;
+    }
+
+    setLogs((current) => mergeLogEvents(current, events));
+  };
 
   const applyRuntimeSnapshot = (snapshot: RuntimeSnapshot) => {
     setProcesses(snapshot.processes);
@@ -505,6 +586,7 @@ function App() {
     setMonitorHistory(snapshot.monitorHistory);
     setAutomationRules(snapshot.automationRules);
     setAutomationHistory(snapshot.automationHistory);
+    appendUnifiedLogs(snapshot.logs);
     setSelectedProcessId((current) =>
       snapshot.processes.some((process) => process.id === current)
         ? current
@@ -553,6 +635,7 @@ function App() {
         setMonitorHistory(hydratedMonitorHistory);
         setAutomationRules(hydratedAutomationRules);
         setAutomationHistory(hydratedAutomationHistory);
+        setLogs(persisted?.runtime.logs?.length ? mergeLogEvents(persisted.runtime.logs, snapshot.logs) : snapshot.logs);
         setCommandState(persisted?.runtime.commandState ?? defaultCommandState);
         setActiveView(persisted?.preferences.activeView ?? "overview");
         setQuery(persisted?.preferences.query ?? "");
@@ -612,6 +695,7 @@ function App() {
         automationRules: isLiveElectronRuntime ? [] : automationRules,
         automationHistory: isLiveElectronRuntime ? [] : automationHistory,
         monitorHistory: isLiveElectronRuntime ? [] : monitorHistory,
+        logs: isLiveElectronRuntime ? [] : logs,
         commandState,
       },
     });
@@ -620,6 +704,7 @@ function App() {
     alerts,
     automationRules,
     automationHistory,
+    logs,
     monitorHistory,
     commandState,
     expandedProcessIds,
@@ -660,11 +745,12 @@ function App() {
           setProcesses(snapshot.processes);
           setPorts(snapshot.ports);
           setAlerts(snapshot.alerts);
-          setMonitorMetrics(snapshot.monitorMetrics);
-          setMonitorHistory(snapshot.monitorHistory);
-          setAutomationRules(snapshot.automationRules);
-          setAutomationHistory(snapshot.automationHistory);
-        })
+        setMonitorMetrics(snapshot.monitorMetrics);
+        setMonitorHistory(snapshot.monitorHistory);
+        setAutomationRules(snapshot.automationRules);
+        setAutomationHistory(snapshot.automationHistory);
+        appendUnifiedLogs(snapshot.logs);
+      })
         .catch(() => {
           // Keep the current dashboard state when a background refresh misses once.
         });
@@ -674,6 +760,29 @@ function App() {
       window.clearInterval(interval);
     };
   }, [isLiveElectronRuntime, runtimeStatus]);
+
+  useEffect(() => {
+    if (!isLiveElectronRuntime || runtimeStatus !== "ready") {
+      return;
+    }
+
+    const unsubscribe = window.mewlHost?.subscribeToLogs?.((events) => {
+      appendUnifiedLogs(events);
+    });
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, [isLiveElectronRuntime, logsPaused, runtimeStatus]);
+
+  useEffect(() => {
+    if (logsPaused || pausedLogBufferRef.current.length === 0) {
+      return;
+    }
+
+    setLogs((current) => mergeLogEvents(current, pausedLogBufferRef.current));
+    pausedLogBufferRef.current = [];
+  }, [logsPaused]);
 
   const deferredQuery = useDeferredValue(query);
   const searchValue = deferredQuery.trim().toLowerCase();
@@ -792,6 +901,32 @@ function App() {
 
     return matchesSeverity && matchesService && matchesTimeWindow;
   });
+  const deferredLogQuery = useDeferredValue(logQuery);
+  const logSearchValue = deferredLogQuery.trim().toLowerCase();
+  const logSourceOptions = Array.from(
+    new Set(logs.map((entry) => entry.sourceLabel).filter((value) => value.length > 0)),
+  );
+  const filteredLogs = logs.filter((entry) => {
+    const matchesSearch = logSearchValue
+      ? [entry.source, entry.sourceLabel, entry.category, entry.message, entry.serviceName]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(logSearchValue)
+      : true;
+    const matchesLevel = logLevelFilter === "all" ? true : entry.level === logLevelFilter;
+    const matchesSource = logSourceFilter === "all" ? true : entry.sourceLabel === logSourceFilter;
+    return matchesSearch && matchesLevel && matchesSource;
+  });
+  const visibleLogs = filteredLogs.slice(-logRenderWindow);
+
+  useEffect(() => {
+    if (activeView !== "logs" || !logFollowTail || visibleLogs.length === 0) {
+      return;
+    }
+
+    logsScrollRef.current?.scrollIntoView({ block: "end" });
+  }, [activeView, logFollowTail, visibleLogs]);
   const runtimeIndicatorTone =
     runtimeStatus === "ready"
       ? "online"
@@ -814,11 +949,18 @@ function App() {
     setAlertSeverityFilter("all");
     setAlertServiceFilter("all");
     setAlertTimeWindow("all");
+    setLogQuery("");
+    setLogLevelFilter("all");
+    setLogSourceFilter("all");
+    setLogFollowTail(true);
+    setLogsPaused(false);
+    pausedLogBufferRef.current = [];
     setManagedEditorMode("edit");
     setManagedDraft(createEmptyManagedDraft());
     setManagedPrefillSourceId("");
     setAutomationHistory([]);
     setMonitorHistory([]);
+    setLogs([]);
 
     void hydrateRuntimeSnapshot()
       .then((snapshot) => {
@@ -829,6 +971,7 @@ function App() {
         setMonitorHistory(snapshot.monitorHistory);
         setAutomationRules(snapshot.automationRules);
         setAutomationHistory(snapshot.automationHistory);
+        setLogs(snapshot.logs);
         setCommandState(defaultCommandState);
         setActiveView("overview");
         setSelectedProcessId(snapshot.processes[0]?.id ?? "");
@@ -947,6 +1090,22 @@ function App() {
       setActiveView(nextView);
       setAlertsOpen(false);
     });
+  };
+
+  const exportVisibleLogs = () => {
+    const payload = visibleLogs
+      .map((entry) => JSON.stringify(entry))
+      .join("\n");
+
+    const blob = new Blob([payload], { type: "application/x-ndjson;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safeStamp = new Date().toISOString().replaceAll(":", "-");
+    link.href = url;
+    link.download = `mewl-logs-${safeStamp}.ndjson`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setCommandState(`Exported ${visibleLogs.length} visible log events.`);
   };
 
   const toggleProcessExpanded = (processId: string) => {
@@ -2534,6 +2693,176 @@ function App() {
     </section>
   );
 
+  const renderLogsPage = () => (
+    <section className="grid gap-4">
+      <div className={panelClass}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.24em] text-white/42">Logs</p>
+            <h3 className="mt-2 text-2xl font-semibold text-white">Unified Diagnostics</h3>
+            <p className="mt-3 max-w-3xl text-sm text-white/56">
+              Managed stdout and stderr, automation history, alert snapshots, and tagged Mewl
+              internal diagnostics stream into one feed without replacing the inspector tails.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLogsPaused((current) => !current)}
+              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/18 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/72 transition duration-300 hover:border-white/18 hover:text-white"
+            >
+              {logsPaused ? <PlayIcon size={14} /> : <Pause size={14} />}
+              {logsPaused ? "Resume" : "Pause"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLogFollowTail((current) => !current)}
+              className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition duration-300 ${
+                logFollowTail
+                  ? "border-emerald-300/20 bg-emerald-400/10 text-emerald-100"
+                  : "border-white/10 bg-black/18 text-white/60 hover:text-white"
+              }`}
+            >
+              Follow Tail
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLogs([]);
+                pausedLogBufferRef.current = [];
+                setCommandState("Cleared the local Logs workspace history.");
+              }}
+              className="rounded-full border border-white/10 bg-black/18 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/72 transition duration-300 hover:border-white/18 hover:text-white"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={exportVisibleLogs}
+              disabled={visibleLogs.length === 0}
+              className="rounded-full border border-white/10 bg-black/18 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white/72 transition duration-300 hover:border-white/18 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Export
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_auto_auto]">
+          <CandyInput
+            value={logQuery}
+            onChange={setLogQuery}
+            hex={accent.green}
+            placeholder="Search messages, sources, categories, or services..."
+          />
+
+          <select
+            value={logSourceFilter}
+            onChange={(event) => setLogSourceFilter(event.target.value)}
+            className="rounded-[22px] border border-white/10 bg-[#0f141b]/94 px-4 py-3 text-sm text-white/78 outline-none"
+          >
+            <option value="all">All Sources</option>
+            {logSourceOptions.map((source) => (
+              <option key={source} value={source}>
+                {source}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex flex-wrap gap-2">
+            {unifiedLogLevelOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setLogLevelFilter(option.id)}
+                className={`rounded-full border px-3 py-2 text-[0.68rem] uppercase tracking-[0.22em] transition duration-300 ${
+                  logLevelFilter === option.id
+                    ? "border-white/14 bg-black/26 text-white"
+                    : "border-white/8 bg-black/18 text-white/42 hover:text-white/72"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-4">
+          {[
+            ["Captured", `${logs.length}`],
+            ["Visible", `${visibleLogs.length}`],
+            ["Buffered", `${pausedLogBufferRef.current.length}`],
+            ["Sources", `${logSourceOptions.length}`],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              className="rounded-[20px] border border-white/8 bg-black/18 px-4 py-3 text-sm"
+            >
+              <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/34">{label}</p>
+              <p className="mt-2 font-semibold text-white">{value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 overflow-hidden rounded-[28px] border border-white/8 bg-[#0a0f15]/96">
+          <div className="flex items-center justify-between gap-4 border-b border-white/8 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="size-2.5 rounded-full bg-rose-400/90" />
+              <span className="size-2.5 rounded-full bg-amber-300/90" />
+              <span className="size-2.5 rounded-full bg-emerald-300/90" />
+            </div>
+            <p className="text-[0.68rem] uppercase tracking-[0.22em] text-white/38">
+              {logsPaused ? "ui paused" : "live tail"}
+            </p>
+          </div>
+
+          <div className="max-h-[72vh] overflow-y-auto px-3 py-3">
+            {visibleLogs.length > 0 ? (
+              <div className="space-y-2 font-mono text-[0.84rem] leading-6">
+                {visibleLogs.map((entry) => (
+                  <article
+                    key={entry.id}
+                    className="rounded-[18px] border border-white/6 bg-white/[0.02] px-3 py-3 transition duration-300 hover:border-white/10 hover:bg-white/[0.04]"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[0.68rem] uppercase tracking-[0.2em] text-white/34">
+                        {formatUnifiedLogStamp(entry.timestamp)}
+                      </span>
+                      <span
+                        className="rounded-full border px-2.5 py-1 text-[0.64rem] font-semibold uppercase tracking-[0.2em]"
+                        style={{
+                          color: unifiedLogLevelHexMap[entry.level],
+                          borderColor: `${unifiedLogLevelHexMap[entry.level]}30`,
+                          backgroundColor: `${unifiedLogLevelHexMap[entry.level]}12`,
+                        }}
+                      >
+                        {entry.level}
+                      </span>
+                      <span className="rounded-full border border-white/8 bg-black/18 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.2em] text-white/44">
+                        {entry.sourceLabel}
+                      </span>
+                      <span className="rounded-full border border-white/8 bg-black/18 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.2em] text-white/34">
+                        {entry.category}
+                      </span>
+                    </div>
+                    <p className="mt-3 whitespace-pre-wrap break-words text-white/82">
+                      {entry.message}
+                    </p>
+                  </article>
+                ))}
+                <div ref={logsScrollRef} />
+              </div>
+            ) : (
+              <div className="rounded-[24px] border border-dashed border-white/10 bg-black/18 px-4 py-8 text-sm text-white/48">
+                No log events match the current diagnostics filters yet.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+
   const renderManagedEditorModal = () => {
     if (!managedEditorOpen || typeof document === "undefined") {
       return null;
@@ -3346,6 +3675,10 @@ function App() {
 
     if (activeView === "managed") {
       return renderManagedPage();
+    }
+
+    if (activeView === "logs") {
+      return renderLogsPage();
     }
 
     if (activeView === "ports") {

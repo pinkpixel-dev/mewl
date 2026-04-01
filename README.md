@@ -7,7 +7,7 @@
 
 Mewl is a local operations dashboard for managing running services, watched ports, quick lifecycle actions, and host pressure from one workspace.
 
-Version `1.0.0` is the first Linux-ready release of Mewl, shipping the Electron desktop shell, live runtime bridge, managed-service workflows, monitoring surfaces, and Linux package outputs.
+Version `1.0.0` is the first Linux-ready release of Mewl, shipping the Electron desktop shell, live runtime bridge, managed-service workflows, a dedicated Logs workspace, monitoring surfaces, and Linux package outputs.
 
 ## Screenshots
 
@@ -58,6 +58,8 @@ Version `1.0.0` is the first Linux-ready release of Mewl, shipping the Electron 
 - Choose per-service restart policies with retry limits so Mewl can recover managed services after unhealthy exits
 - Update managed `autostart` and `watch ports` settings from the UI and persist them back to `mewl.services.json`
 - Inspect a persisted automation history stream for starts, stops, profile runs, retries, and failures
+- Use the dedicated `Logs` workspace to follow one unified diagnostics feed for managed stdout/stderr, automation history, alert snapshots, and tagged Mewl-internal runtime events
+- Filter the Logs feed by search text, severity, and source, then pause UI consumption, follow the live tail, clear the local view, or export the current window to newline-delimited JSON
 - Filter the alerts tray by severity, service, and time window when you need to narrow the current incident feed
 - Catch richer runtime issues including crash loops, reserved ports claimed by the wrong process, and unhealthy managed-service CPU or memory spikes
 - Read rolling trend visuals for CPU, memory, disk, network, and GPU from the Monitor page instead of only seeing single-snapshot pressure bars
@@ -80,15 +82,16 @@ Version `1.0.0` is the first Linux-ready release of Mewl, shipping the Electron 
 - Vite 8
 - Tailwind CSS 4
 - lucide-react
+- consola
 - Electron Builder
 
 ## Current Reality
 
-`1.0.0` is the first real release line for Mewl, with Linux desktop delivery, managed-service control, host monitoring, and the Observed-versus-Managed runtime split in place.
+`1.0.0` is the first real release line for Mewl, with Linux desktop delivery, managed-service control, unified diagnostics, host monitoring, and the Observed-versus-Managed runtime split in place.
 
 - The UI now hydrates only through the live Electron desktop bridge and restores saved workspace preferences from local storage.
 - Runtime loading flows through [`src/runtime/provider.ts`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/src/runtime/provider.ts), which now requires the Electron host bridge instead of exposing a browser fallback.
-- Lifecycle actions, automation toggles, startup profiles, and managed-service logs now round-trip through the live Electron runtime.
+- Lifecycle actions, automation toggles, startup profiles, managed-service logs, and the new unified Logs feed now round-trip through the live Electron runtime.
 - Electron is the chosen host integration layer for the native bridge because it keeps the renderer, preload contract, and runtime orchestration in the same TypeScript stack.
 - Managed process launching, live port discovery, and host telemetry now run through the Electron preload bridge, with the Processes page staying focused on live inspection and the Managed page owning saved service control.
 - Managed-service configuration now lives in a per-user app config file instead of the repo, so packaged Electron builds can keep using the same settings location.
@@ -229,6 +232,14 @@ Managed service launches are now intentionally strict: Mewl tokenizes plain comm
 |-- tsconfig.json
 `-- vite.config.ts
 ```
+
+## Diagnostics
+
+The dedicated `Logs` workspace is now part of the shipped `1.0.0` desktop shell.
+
+- Electron main owns log aggregation, retention, and batched append delivery over the preload bridge.
+- Managed stdout/stderr, automation history, alert snapshots, and Mewl-internal diagnostics all land in one normalized feed.
+- `consola` powers tagged Mewl-internal logging with sources like `runtime`, `process-manager`, `automation`, and `ports`, while the existing per-process inspector tails stay intact as the narrow detail view.
 
 ## Design Direction
 

@@ -3,6 +3,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { execFile, spawn } = require("node:child_process");
 const { promisify } = require("node:util");
+const { createConsola } = require("consola");
 
 const execFileAsync = promisify(execFile);
 const processLimit = 18;
@@ -12,9 +13,18 @@ const managedLogTailLimit = 12;
 const automationHistoryLimit = 36;
 const defaultRestartLimit = 3;
 const metricHistoryLimit = 24;
+const unifiedLogLimit = 1200;
+const unifiedLogFlushDelayMs = 140;
 const repoRoot = process.cwd();
 const managedServiceState = new Map();
 const metricHistoryState = new Map();
+const unifiedLogState = {
+  events: [],
+  eventIds: new Set(),
+  pending: [],
+  flushTimer: null,
+  listener: null,
+};
 let autoStartInitialized = false;
 const defaultInheritedEnvKeys = ["PATH", "HOME", "LANG", "TERM", "USER", "LOGNAME", "SHELL"];
 const serviceConfigFileName = "mewl.services.json";
@@ -34,6 +44,111 @@ const scriptInterpreterByExtension = {
   ".cjs": "node",
   ".mjs": "node",
 };
+
+function formatInternalLogMessage(args = []) {
+  return args
+    .map((arg) => {
+      if (typeof arg === "string") {
+        return arg;
+      }
+
+      if (arg instanceof Error) {
+        return arg.stack || arg.message;
+      }
+
+      try {
+        return JSON.stringify(arg);
+      } catch (_error) {
+        return String(arg);
+      }
+    })
+    .join(" ");
+}
+
+function flushUnifiedLogBatch() {
+  unifiedLogState.flushTimer = null;
+
+  if (!unifiedLogState.listener || unifiedLogState.pending.length === 0) {
+    unifiedLogState.pending = [];
+    return;
+  }
+
+  const batch = unifiedLogState.pending.slice();
+  unifiedLogState.pending = [];
+  unifiedLogState.listener(batch);
+}
+
+function queueUnifiedLogFlush() {
+  if (unifiedLogState.flushTimer) {
+    return;
+  }
+
+  unifiedLogState.flushTimer = setTimeout(flushUnifiedLogBatch, unifiedLogFlushDelayMs);
+}
+
+function rememberUnifiedLogEvent(event, { broadcast = false } = {}) {
+  if (!event || typeof event.id !== "string" || unifiedLogState.eventIds.has(event.id)) {
+    return;
+  }
+
+  unifiedLogState.eventIds.add(event.id);
+  unifiedLogState.events.push(event);
+
+  while (unifiedLogState.events.length > unifiedLogLimit) {
+    const removed = unifiedLogState.events.shift();
+    if (removed?.id) {
+      unifiedLogState.eventIds.delete(removed.id);
+    }
+  }
+
+  if (broadcast) {
+    unifiedLogState.pending.push(event);
+    queueUnifiedLogFlush();
+  }
+}
+
+function getUnifiedLogSnapshot() {
+  return unifiedLogState.events.slice();
+}
+
+function setRuntimeLogBatchListener(listener) {
+  unifiedLogState.listener = typeof listener === "function" ? listener : null;
+}
+
+function normalizeConsolaLevel(type) {
+  if (type === "fatal" || type === "error" || type === "warn" || type === "log" || type === "info" || type === "success" || type === "debug" || type === "trace") {
+    return type;
+  }
+
+  return "info";
+}
+
+const mewlLogger = createConsola({
+  level: process.env.NODE_ENV === "development" ? 4 : 3,
+  reporters: [
+    {
+      log(logObj) {
+        rememberUnifiedLogEvent(
+          {
+            id: `internal-${logObj.date?.toISOString?.() ?? new Date().toISOString()}-${logObj.tag || "mewl"}-${Math.random().toString(36).slice(2, 8)}`,
+            timestamp: logObj.date?.toISOString?.() ?? new Date().toISOString(),
+            level: normalizeConsolaLevel(logObj.type),
+            source: logObj.tag || "mewl",
+            sourceLabel: logObj.tag || "mewl",
+            category: "internal",
+            message: formatInternalLogMessage(logObj.args),
+          },
+          { broadcast: true },
+        );
+      },
+    },
+  ],
+});
+
+const runtimeLogger = mewlLogger.withTag("runtime");
+const processManagerLogger = mewlLogger.withTag("process-manager");
+const automationLogger = mewlLogger.withTag("automation");
+const portsLogger = mewlLogger.withTag("ports");
 
 function uniqueList(values) {
   return Array.from(new Set(values.filter(Boolean)));
@@ -94,9 +209,11 @@ function formatStamp(date = new Date()) {
 }
 
 function createLogEntry(level, text) {
+  const timestamp = new Date().toISOString();
   return {
     id: `live-log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    stamp: formatStamp(),
+    stamp: formatStamp(new Date(timestamp)),
+    timestamp,
     level,
     text,
   };
@@ -144,6 +261,70 @@ function createAlert({
   };
 }
 
+function normalizeAlertTimestamp(stamp) {
+  if (!stamp || stamp === "now") {
+    return new Date().toISOString();
+  }
+
+  const parsed = Date.parse(stamp);
+  return Number.isNaN(parsed) ? new Date().toISOString() : new Date(parsed).toISOString();
+}
+
+function rememberAlertEvents(alerts) {
+  for (const alert of alerts) {
+    rememberUnifiedLogEvent({
+      id: `alert-${alert.id}`,
+      timestamp: normalizeAlertTimestamp(alert.stamp),
+      level:
+        alert.severity === "critical"
+          ? "error"
+          : alert.severity === "warning"
+            ? "warn"
+            : "info",
+      source: alert.category || "runtime",
+      sourceLabel: alert.serviceName || alert.category || "runtime",
+      category: "alert",
+      message: `${alert.title}: ${alert.detail}`,
+      serviceId: alert.serviceId,
+      serviceName: alert.serviceName,
+    });
+  }
+}
+
+function rememberManagedInspectorLogs(services) {
+  for (const service of services) {
+    for (const entry of service.logs.stdout) {
+      rememberUnifiedLogEvent({
+        id: `managed-${service.id}-stdout-${entry.id}`,
+        timestamp: entry.timestamp || new Date().toISOString(),
+        level: normalizeProcessLevelToUnified(entry.level),
+        source: service.id,
+        sourceLabel: service.name,
+        category: "managed-stdout",
+        message: entry.text,
+        serviceId: service.id,
+        serviceName: service.name,
+        stream: "stdout",
+      });
+    }
+
+    for (const entry of service.logs.stderr) {
+      rememberUnifiedLogEvent({
+        id: `managed-${service.id}-stderr-${entry.id}`,
+        timestamp: entry.timestamp || new Date().toISOString(),
+        level: normalizeProcessLevelToUnified(entry.level),
+        source: service.id,
+        sourceLabel: service.name,
+        category: "managed-stderr",
+        message: entry.text,
+        serviceId: service.id,
+        serviceName: service.name,
+        stream: "stderr",
+      });
+    }
+  }
+}
+
 function trimAutomationHistory(entries) {
   return entries.slice(0, automationHistoryLimit);
 }
@@ -184,8 +365,44 @@ function trimLogEntries(entries) {
   return entries.slice(-managedLogTailLimit);
 }
 
-function appendManagedLogEntry(logs, stream, entry) {
+function normalizeProcessLevelToUnified(level) {
+  if (level === "error") {
+    return "error";
+  }
+
+  if (level === "warning") {
+    return "warn";
+  }
+
+  if (level === "debug") {
+    return "debug";
+  }
+
+  return "info";
+}
+
+function appendManagedLogEntry(logs, stream, entry, service) {
   logs[stream] = trimLogEntries([...logs[stream], entry]);
+
+  if (!service) {
+    return;
+  }
+
+  rememberUnifiedLogEvent(
+    {
+      id: `managed-${service.id}-${stream}-${entry.id}`,
+      timestamp: entry.timestamp || new Date().toISOString(),
+      level: normalizeProcessLevelToUnified(entry.level),
+      source: service.id,
+      sourceLabel: service.name,
+      category: stream === "stderr" ? "managed-stderr" : "managed-stdout",
+      message: entry.text,
+      serviceId: service.id,
+      serviceName: service.name,
+      stream,
+    },
+    { broadcast: true },
+  );
 }
 
 function getManagedState(serviceId) {
@@ -1332,8 +1549,28 @@ async function saveManagedConfig(config) {
 
 async function recordAutomationHistory(entry) {
   const config = await loadManagedConfig();
-  config.history = trimAutomationHistory([createAutomationHistoryEntry(entry), ...config.history]);
+  const createdEntry = createAutomationHistoryEntry(entry);
+  config.history = trimAutomationHistory([createdEntry, ...config.history]);
   await saveManagedConfig(config);
+  rememberUnifiedLogEvent(
+    {
+      id: `automation-${createdEntry.id}`,
+      timestamp: createdEntry.stamp,
+      level:
+        createdEntry.outcome === "error"
+          ? "error"
+          : createdEntry.outcome === "warning"
+            ? "warn"
+            : "success",
+      source: createdEntry.source,
+      sourceLabel: createdEntry.serviceName || createdEntry.source,
+      category: "automation",
+      message: `${createdEntry.title}: ${createdEntry.detail}`,
+      serviceId: createdEntry.serviceId,
+      serviceName: createdEntry.serviceName,
+    },
+    { broadcast: true },
+  );
 }
 
 function resolveServiceCwd(relativeCwd) {
@@ -1384,6 +1621,7 @@ async function handleManagedChildExit(service, serviceState, code, signal) {
       code === 0 ? "info" : "error",
       `Managed service ${service.name} exited (${serviceState.lastExit}).`,
     ),
+    service,
   );
 
   if (!wasStopping) {
@@ -1437,6 +1675,7 @@ async function handleManagedChildExit(service, serviceState, code, signal) {
         "error",
         error instanceof Error ? error.message : `Automatic restart failed for ${service.name}.`,
       ),
+      service,
     );
     await recordAutomationHistory({
       title: `${service.name} automatic restart failed`,
@@ -1456,6 +1695,7 @@ function attachChildListeners(service, serviceState, child) {
       serviceState.logs,
       "stdout",
       createLogEntry("info", String(chunk).trim() || "stdout updated"),
+      service,
     );
     markHeartbeat(serviceState, "live");
   });
@@ -1465,6 +1705,7 @@ function attachChildListeners(service, serviceState, child) {
       serviceState.logs,
       "stderr",
       createLogEntry("warning", String(chunk).trim() || "stderr updated"),
+      service,
     );
     markHeartbeat(serviceState, "live");
   });
@@ -1485,6 +1726,7 @@ function attachChildListeners(service, serviceState, child) {
         "info",
         `Managed service ${service.name} started with pid ${child.pid}.`,
       ),
+      service,
     );
   });
 
@@ -1499,6 +1741,7 @@ function attachChildListeners(service, serviceState, child) {
       serviceState.logs,
       "stderr",
       createLogEntry("error", `Managed service ${service.name} failed to start: ${error.message}`),
+      service,
     );
     void recordAutomationHistory({
       title: `${service.name} failed to start`,
@@ -1564,6 +1807,11 @@ async function assertReservedPortsAvailable(service, ignoredPids = []) {
   );
 
   if (occupiedPorts.size > 0) {
+    portsLogger.warn("Reserved ports are occupied.", {
+      serviceId: service.id,
+      serviceName: service.name,
+      ports: Array.from(occupiedPorts),
+    });
     throw new Error(
       `${service.name} could not start because reserved port${occupiedPorts.size === 1 ? "" : "s"} ${Array.from(occupiedPorts).join(", ")} ${occupiedPorts.size === 1 ? "is" : "are"} already in use.`,
     );
@@ -1580,6 +1828,7 @@ async function runManagedCommand(service, commandLine, label) {
     serviceState.logs,
     "stdout",
     createLogEntry("info", `${label} command requested for ${service.name}.`),
+    service,
   );
 
   try {
@@ -1594,6 +1843,7 @@ async function runManagedCommand(service, commandLine, label) {
         serviceState.logs,
         "stdout",
         createLogEntry("info", result.stdout.trim()),
+        service,
       );
     }
 
@@ -1602,6 +1852,7 @@ async function runManagedCommand(service, commandLine, label) {
         serviceState.logs,
         "stderr",
         createLogEntry("warning", result.stderr.trim()),
+        service,
       );
     }
 
@@ -1612,11 +1863,11 @@ async function runManagedCommand(service, commandLine, label) {
     const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : "";
 
     if (stdout) {
-      appendManagedLogEntry(serviceState.logs, "stdout", createLogEntry("info", stdout));
+      appendManagedLogEntry(serviceState.logs, "stdout", createLogEntry("info", stdout), service);
     }
 
     if (stderr) {
-      appendManagedLogEntry(serviceState.logs, "stderr", createLogEntry("error", stderr));
+      appendManagedLogEntry(serviceState.logs, "stderr", createLogEntry("error", stderr), service);
     }
 
     throw error;
@@ -1640,6 +1891,7 @@ async function startManagedService(service, source = "manual") {
     serviceState.logs,
     "stdout",
     createLogEntry("info", `Start requested for ${service.name}.`),
+    service,
   );
 
   const cwd = resolveServiceCwd(service.cwd);
@@ -1751,6 +2003,7 @@ function syncManagedServiceState(service, rawProcesses, portMap) {
           "info",
           `Mewl reattached ${service.name} from a live host process on pid ${adoptedProcess.pid}.`,
         ),
+        service,
       );
     }
   }
@@ -1798,6 +2051,7 @@ async function stopManagedService(service, source = "manual") {
       serviceState.logs,
       "stdout",
       createLogEntry("warning", `Stop requested for ${service.name}.`),
+      service,
     );
     await runManagedCommand(service, stopCommand, "Stop");
 
@@ -1833,6 +2087,7 @@ async function stopManagedService(service, source = "manual") {
     serviceState.logs,
     "stdout",
     createLogEntry("warning", `Stop requested for ${service.name}.`),
+    service,
   );
 
   const child = serviceState.child;
@@ -1875,6 +2130,7 @@ async function stopManagedService(service, source = "manual") {
       serviceState.logs,
       "stdout",
       createLogEntry("info", `Managed host process ${service.name} was terminated after reattachment.`),
+      service,
     );
   }
 
@@ -2008,6 +2264,7 @@ async function initializeManagedServices() {
             ? error.message
             : `Autostart failed for ${service.name}.`,
         ),
+        service,
       );
       await recordAutomationHistory({
         title: `${service.name} autostart failed`,
@@ -2039,6 +2296,7 @@ async function initializeManagedServices() {
                 ? error.message
                 : `Profile boot failed for ${service.name}.`,
             ),
+            service,
           );
           await recordAutomationHistory({
             title: `${service.name} profile start failed`,
@@ -2248,6 +2506,7 @@ function buildAlerts(processes, ports, metrics, services, history) {
 }
 
 async function hydrateRuntimeSnapshot() {
+  runtimeLogger.debug("Hydrating runtime snapshot.");
   await initializeManagedServices();
 
   const [cpuPercent, networkUsage, diskPercent, gpuUsage, rawProcesses, rawBindings, config] =
@@ -2486,21 +2745,53 @@ async function hydrateRuntimeSnapshot() {
     available: metric.available,
   }));
 
+  const alerts = buildAlerts(
+    [...managedProcesses, ...discoveredProcesses],
+    ports,
+    metrics,
+    services,
+    history,
+  );
+  rememberManagedInspectorLogs(managedProcesses);
+  rememberAlertEvents(alerts);
+
+  for (const entry of history) {
+    rememberUnifiedLogEvent({
+      id: `automation-${entry.id}`,
+      timestamp: entry.stamp,
+      level:
+        entry.outcome === "error"
+          ? "error"
+          : entry.outcome === "warning"
+            ? "warn"
+            : "success",
+      source: entry.source,
+      sourceLabel: entry.serviceName || entry.source,
+      category: "automation",
+      message: `${entry.title}: ${entry.detail}`,
+      serviceId: entry.serviceId,
+      serviceName: entry.serviceName,
+    });
+  }
+
   return {
     processes: [...managedProcesses, ...discoveredProcesses],
     ports,
-    alerts: buildAlerts([...managedProcesses, ...discoveredProcesses], ports, metrics, services, history),
+    alerts,
     monitorMetrics: [metrics.cpu, metrics.memory, metrics.disk, metrics.network, metrics.gpu],
     monitorHistory,
     automationRules: buildAutomationRules(services, profiles),
     automationHistory: history,
+    logs: getUnifiedLogSnapshot(),
   };
 }
 
 async function performProcessAction(action, processId) {
   await initializeManagedServices();
+  processManagerLogger.info("Performing process action.", { action, processId });
 
   if (action === "scan") {
+    runtimeLogger.debug("Running live host scan on demand.");
     return {
       snapshot: await hydrateRuntimeSnapshot(),
       message: "Live host scan completed.",
@@ -2508,6 +2799,7 @@ async function performProcessAction(action, processId) {
   }
 
   if (action === "kill") {
+    processManagerLogger.warn("Observed process kill requested.", { processId });
     return killObservedProcess(processId);
   }
 
@@ -2536,6 +2828,7 @@ async function performProcessAction(action, processId) {
 }
 
 async function updateManagedService(processId, updates) {
+  processManagerLogger.info("Updating managed service.", { processId });
   const config = await loadManagedConfig();
   const serviceIndex = config.services.findIndex((service) => service.id === processId);
 
@@ -2614,6 +2907,9 @@ async function updateManagedService(processId, updates) {
 }
 
 async function createManagedService(service) {
+  processManagerLogger.info("Creating managed service draft.", {
+    name: typeof service?.name === "string" ? service.name : "unknown",
+  });
   const config = await loadManagedConfig();
   const name = typeof service.name === "string" ? service.name.trim() : "";
   const startCommand =
@@ -2676,6 +2972,7 @@ async function createManagedService(service) {
 }
 
 async function removeManagedService(processId) {
+  processManagerLogger.warn("Removing managed service.", { processId });
   const config = await loadManagedConfig();
   const serviceIndex = config.services.findIndex((service) => service.id === processId);
   if (serviceIndex === -1) {
@@ -2703,6 +3000,7 @@ async function removeManagedService(processId) {
 }
 
 async function applyAutomationRule(ruleId, enabled) {
+  automationLogger.info("Applying automation rule.", { ruleId, enabled });
   const config = await loadManagedConfig();
 
   if (ruleId.startsWith("service-autostart:")) {
@@ -2804,6 +3102,7 @@ async function shutdownManagedServices() {
 module.exports = {
   hydrateRuntimeSnapshot,
   performProcessAction,
+  setRuntimeLogBatchListener,
   updateManagedService,
   createManagedService,
   removeManagedService,

@@ -33,6 +33,7 @@ The current implementation includes:
 - a base-aware branded shell icon path so the sidebar app icon and favicon still render in packaged `file://` builds
 - a rose-accented shared search field that matches the Pink Pixel brand color
 - a clean dashboard made of summary cards plus short process and port preview lists
+- overview process preview cards that now keep long names and command text wrapped inside the card bounds instead of allowing flex-row overflow
 - a dedicated Processes page with expandable cards and a full inspector surface for live process inspection
 - improved wrapping rules on expanded process cards so long commands and filesystem paths stay contained within the card layout
 - explicit observed-runtime action panels that can prefill a managed draft or terminate only the current observed pid

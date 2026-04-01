@@ -2182,10 +2182,12 @@ function App() {
                   }}
                   className="w-full rounded-[24px] border border-white/8 bg-[#0f141b]/94 px-4 py-4 text-left transition duration-300 hover:border-white/12 hover:bg-white/[0.03]"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-white/88">{process.name}</p>
-                      <p className="mt-1 text-xs uppercase tracking-[0.22em] text-white/34">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words text-sm font-semibold text-white/88 [overflow-wrap:anywhere]">
+                        {process.name}
+                      </p>
+                      <p className="mt-1 break-words text-xs uppercase tracking-[0.22em] text-white/34 [overflow-wrap:anywhere]">
                         {process.command}
                       </p>
                     </div>

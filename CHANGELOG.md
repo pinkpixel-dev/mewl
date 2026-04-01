@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-04-01 16:02 EDT
+
+- fixed the Overview `Running Now` preview cards so very long process names and command strings wrap inside the card instead of bleeding past the panel edge
+- refreshed the README, overview, roadmap, release notes, and blueprint notes so the overview-card text containment fix is documented consistently
+
 ## 2026-04-01 15:34 EDT
 
 - fixed an intermittent Monitor page render glitch where a stale card subtree could appear inside the Trend Canvas after workspace/view transitions or live tile reshuffles

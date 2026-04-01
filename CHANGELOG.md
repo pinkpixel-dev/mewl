@@ -4,22 +4,30 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
-## 2026-03-31 23:06 EDT
+## 1.0.0 - 2026-03-31
+
+- first Linux-ready public release of Mewl
+- ships the Electron desktop shell, live runtime bridge, managed-service workflows, monitoring surfaces, and Linux package outputs
+- release artifacts now target AppImage, `.deb`, and `.rpm`
+
+### Release Prep
+
+#### 2026-03-31 23:06 EDT
 
 - disabled `electron-builder` publishing for Linux package commands and CI runs so GitHub Actions artifact builds no longer require `GH_TOKEN`
 - refreshed the README and overview to document the local-only Linux packaging behavior
 
-## 2026-03-31 23:00 EDT
+#### 2026-03-31 23:00 EDT
 
 - fixed the packaged shell branding icon path by switching the sidebar app icon and favicon to base-aware `icon.png` URLs instead of root-absolute `/icon.png`
 - refreshed the README and overview to document the packaged UI icon fix for `file://` Linux builds
 
-## 2026-03-31 22:53 EDT
+#### 2026-03-31 22:53 EDT
 
 - added a Linux packaging pipeline with `electron-builder`, including `npm run package:linux` plus Linux targets for AppImage, `.deb`, and `.rpm`
 - generated packaging icons from `public/icon.png` through a reusable `scripts/generate-icons.mjs` flow, producing Linux icon sizes and future-facing `.ico` groundwork
 - added a manual GitHub Actions workflow for Linux package builds and artifact upload
-- verified Linux packaging locally by producing `release/Mewl-0.1.0-x86_64.AppImage`, `release/mewl_0.1.0_amd64.deb`, and `release/mewl-0.1.0.x86_64.rpm`
+- verified Linux packaging locally by producing `release/Mewl-1.0.0-x86_64.AppImage`, `release/mewl_1.0.0_amd64.deb`, and `release/mewl-1.0.0.x86_64.rpm`
 - refreshed the README, overview, and roadmap to document the Linux-first packaging flow and marked desktop delivery complete for the current Linux target scope
 
 ## 2026-03-31 22:27 EDT

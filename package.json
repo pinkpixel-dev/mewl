@@ -1,7 +1,7 @@
 {
   "name": "mewl",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Mewl local process manager for running services, ports, and system monitoring.",
   "main": "electron/main.cjs",
   "type": "module",

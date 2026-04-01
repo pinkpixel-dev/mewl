@@ -6,6 +6,8 @@ Mewl is a local process and port management app for Pink Pixel. This pass pushes
 
 The latest iteration chooses Electron as the native host direction, introduces a runtime-provider seam, requires the live Electron bridge for boot, wires real lifecycle control for Mewl-owned services, and now adds restart policies, a persisted automation history feed, a filterable alerts tray, richer rolling monitor visuals, card-level managed-service toggles, and first-class managed service modes for `command`, `script`, and `docker` flows on top of the Managed workspace cleanup flow, observed-to-managed review path, and observed-only kill action.
 
+Version `1.0.0` marks the first Linux-ready release point for that product slice.
+
 ## Technical Summary
 
 - Framework: React 19
@@ -211,6 +213,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - no testing suite yet
 - the runtime bridge is still Linux-first, so packaged Linux builds are the supported delivery target while Windows host inspection remains out of scope for now
 - the local terminal environment used for automated verification still reports an Electron bootstrap issue before the app process fully initializes, so the fix here was validated by build output and runtime-path inspection rather than a successful interactive Electron launch in-tool
+- `1.0.0` should be read as the first stable Linux release rather than the end of all platform and quality work
 
 ## Extension Points
 

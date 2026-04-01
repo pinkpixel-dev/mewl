@@ -7,6 +7,8 @@
 
 Mewl is a local operations dashboard for managing running services, watched ports, quick lifecycle actions, and host pressure from one workspace.
 
+Version `1.0.0` is the first Linux-ready release of Mewl, shipping the Electron desktop shell, live runtime bridge, managed-service workflows, monitoring surfaces, and Linux package outputs.
+
 ## What It Does Today
 
 - Search a managed local runtime made up of services, workers, tooling, and data processes
@@ -60,7 +62,7 @@ Mewl is a local operations dashboard for managing running services, watched port
 
 ## Current Reality
 
-This is the first real product pass, not the final native implementation yet.
+`1.0.0` is the first real release line for Mewl, with Linux desktop delivery, managed-service control, host monitoring, and the Observed-versus-Managed runtime split in place.
 
 - The UI now hydrates only through the live Electron desktop bridge and restores saved workspace preferences from local storage.
 - Runtime loading flows through [`src/runtime/provider.ts`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/src/runtime/provider.ts), which now requires the Electron host bridge instead of exposing a browser fallback.
@@ -135,6 +137,12 @@ npm run package:linux
 ```
 
 That packaging flow regenerates icons from [`public/icon.png`](/home/sizzlebop/PINKPIXEL/PROJECTS/CURRENT/mewl/public/icon.png), rebuilds the renderer, and emits AppImage, `.deb`, and `.rpm` artifacts into `release/`.
+
+For the `1.0.0` release, the expected Linux artifact names are:
+
+- `release/Mewl-1.0.0-x86_64.AppImage`
+- `release/mewl_1.0.0_amd64.deb`
+- `release/mewl-1.0.0.x86_64.rpm`
 
 Managed desktop services are stored in a per-user config file:
 
@@ -258,3 +266,4 @@ The current product direction is intentionally utility-first rather than dashboa
 - Creating from an observed process now opens the Managed editor with a prefilled draft banner so the saved definition is reviewed before it becomes part of Mewl's catalog.
 - Killing an observed process is now a dedicated live-runtime action that targets only the current pid and keeps managed lifecycle semantics separate.
 - The current packaging work is Linux-first because the runtime bridge still relies on Linux host-inspection paths and commands for process, port, disk, network, and GPU data.
+- `1.0.0` is intentionally a Linux-first release. Cross-platform packaging can come later, but the current runtime bridge is designed around Linux host-inspection commands and files.

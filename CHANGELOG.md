@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 22:27 EDT
+
+- removed the redundant `managed` ownership pill from cards on the Managed page so saved service cards focus on status and service mode instead
+- refreshed the README and overview to document the tighter Managed card presentation
+
 ## 2026-03-31 22:17 EDT
 
 - added explicit managed service modes for `command`, `script`, and `docker`, including mode-specific editor labels, guidance, and saved runtime metadata

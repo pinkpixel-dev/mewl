@@ -184,6 +184,7 @@ The current product direction is intentionally utility-first rather than dashboa
 - observed-only action panels on live process cards and inspector, with explicit language around draft creation versus pid termination
 - managed cards now carry their own icon-only lifecycle controls so command execution stays attached to saved service definitions
 - process surfaces now label each entry as `managed` or `observed` without extra explanatory filler on observed cards
+- the Managed page no longer repeats a `managed` ownership pill on every saved service card, keeping those cards focused on status plus service mode
 - observed process cards now prefer launchable parent app rows instead of noisy helper children, which keeps the live process list focused on the app users actually mean
 - collapsed process cards now stay compact, with long command and path details moved into the expanded state
 - dedicated Ports and Monitor pages for deeper operational detail

@@ -2398,7 +2398,6 @@ function App() {
                       <StatusPill tone={processToneMap[process.status]} label={process.status} />
                       {renderManagedReviewTag(process)}
                       {renderManagedKindTag(process)}
-                      {renderProcessOwnershipTag(process)}
                     </div>
                   </div>
 

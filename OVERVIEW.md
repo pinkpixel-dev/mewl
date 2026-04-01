@@ -184,6 +184,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - automation history now records manual actions, runtime autostarts, profile runs, unexpected exits, and policy retries even though the service-level toggles now live on the Managed cards
 - observed-process draft creation jumps directly into the Managed workspace with a review banner and prefilled launch details
 - the Managed workspace now prioritizes card density, using a two-column desktop grid with modal editing so the main surface stays filled with services instead of form chrome
+- managed cards now show service mode without repeating a redundant `managed` ownership pill on every card in the Managed workspace
 - observed-process termination is framed as a live pid action rather than a managed-service edit
 - button glow behavior follows Sparklebots interaction patterns
 - progress indicators and animated signal bars add motion without crowding the layout

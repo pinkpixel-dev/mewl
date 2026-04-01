@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 [Unreleased]
 
+## 2026-03-31 23:54 EDT
+
+- added a release screenshot gallery to the README for the overview, processes, managed, ports, and monitor workspaces
+- refreshed the overview, roadmap, and release notes so the published docs now mention the README screenshot gallery
+
+## 2026-03-31 23:34 EDT
+
+- added the published `1.0.0` Linux package download links to the README and release notes
+- refreshed the overview to note that the shipped Linux artifacts now have public download URLs
+
 ## 1.0.0 - 2026-03-31
 
 - first Linux-ready public release of Mewl

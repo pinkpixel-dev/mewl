@@ -9,7 +9,29 @@ Mewl is a local operations dashboard for managing running services, watched port
 
 Version `1.0.0` is the first Linux-ready release of Mewl, shipping the Electron desktop shell, live runtime bridge, managed-service workflows, monitoring surfaces, and Linux package outputs.
 
-## What It Does Today
+## Screenshots
+
+### Overview
+
+![Mewl overview dashboard](screenshots/Screenshot1.png)
+
+### Processes
+
+![Mewl processes workspace](screenshots/Screenshot2.png)
+
+### Managed
+
+![Mewl managed services workspace](screenshots/Screenshot3.png)
+
+### Ports
+
+![Mewl ports workspace](screenshots/Screenshot4.png)
+
+### Monitor
+
+![Mewl monitor workspace](screenshots/Screenshot5.png)
+
+## What It Does
 
 - Search a managed local runtime made up of services, workers, tooling, and data processes
 - Scan the live workspace from a compact top command strip
@@ -87,6 +109,7 @@ Version `1.0.0` is the first Linux-ready release of Mewl, shipping the Electron 
 - Linux desktop packaging is now wired through `electron-builder`, with generated icon assets and package commands for AppImage, `.deb`, and `.rpm`.
 - A manual GitHub Actions workflow now exists for Linux package builds and artifact upload, while Windows packaging remains intentionally out of scope until the runtime bridge itself becomes cross-platform.
 - Linux packaging now forces `electron-builder` into local-only output mode with `--publish never`, so CI artifact builds do not require a GitHub token.
+- The release README now includes real product screenshots for the overview, processes, managed, ports, and monitor workspaces.
 
 ## Run Locally
 
@@ -143,6 +166,12 @@ For the `1.0.0` release, the expected Linux artifact names are:
 - `release/Mewl-1.0.0-x86_64.AppImage`
 - `release/mewl_1.0.0_amd64.deb`
 - `release/mewl-1.0.0.x86_64.rpm`
+
+Direct downloads for `1.0.0`:
+
+- [AppImage](https://pub-2634147a32ee4044bd80cbdd0918010c.r2.dev/Mewl-1.0.0-x86_64.AppImage)
+- [RPM](https://pub-2634147a32ee4044bd80cbdd0918010c.r2.dev/mewl-1.0.0.x86_64.rpm)
+- [DEB](https://pub-2634147a32ee4044bd80cbdd0918010c.r2.dev/mewl_1.0.0_amd64.deb)
 
 Managed desktop services are stored in a per-user config file:
 

@@ -134,6 +134,7 @@ The current implementation:
 - keeps discovered host processes read-only so Mewl does not send lifecycle signals to processes it does not own
 - now exposes a separate observed kill path that can terminate a live pid only when it is not already claimed by a managed service
 - now supports Linux package groundwork through `electron-builder`, including generated icon resources and package metadata for AppImage, `.deb`, and `.rpm` outputs
+- the release documentation now includes published download links for the `1.0.0` Linux package artifacts
 - now forces Linux package builds into non-publishing artifact mode so CI packaging does not require GitHub release credentials
 
 ### `electron/main.cjs`
@@ -201,6 +202,7 @@ This structure keeps the app close to the original mockup mood while making the 
 - monitor visuals combine quiet renderer polling with runtime-provided history series so the charts keep moving during an active desktop session
 - the top command bar now owns a higher stacking layer so the alerts tray stays above the dashboard cards
 - Linux packaging now runs from one command path, regenerating icons from `public/icon.png` before building AppImage, `.deb`, and `.rpm` artifacts into `release/`
+- the release docs now include a README screenshot gallery covering the overview, processes, managed, ports, and monitor workspaces
 
 ## Current Limitations
 
